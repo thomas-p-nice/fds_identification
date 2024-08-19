@@ -1,6 +1,7 @@
 ---
 title: "Legal status--FDS identification questions"
 format: html
+theme: cosmo  
 date: today
 editor: visual
 execute: 
