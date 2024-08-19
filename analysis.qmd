@@ -1,0 +1,217 @@
+---
+title: "Legal status--FDS identification questions"
+format: html
+date: today
+editor: visual
+execute: 
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r packages}
+#| warning: false
+#| message: false
+library(labelled)
+library(tibble)
+library(tidyverse)
+library(tidyr)
+library(forcats)
+library(readr)
+library(readxl)
+library(haven)
+library(lubridate)
+library(kableExtra)
+library(fusen)
+library(srvyr)
+library(gtable)
+library(rlang)
+library(stringr)
+library(purrr)
+library(tibble)
+library(readr)
+library(unhcrthemes)
+library(writexl)
+library(pins)
+```
+
+```{r sourceFunctions}
+load_flat_functions("functions/flat_functions_datamanagement.qmd", envir = globalenv())
+```
+
+## Import country data
+```{r readData}
+#SSD
+ssd_hhroster <- read_rds("data/SSD/hhroster_clean.rds")
+ssd_rmember <- read_rds("data/SSD/rmember_clean.rds")
+
+#PAK
+pak_hhroster <- read_rds("data/PAK/hhroster_merge.rds")
+
+#CMR
+source(".Renviron")
+board <- board_connect(auth = "envvar")
+cmr_df_l <- pin_read(board, "nice@unhcr.org/FDS_CMR_df_l")
+```
+
+## Analysis
+### South Sudan
+Combine "recognized refugee" and "refugee enrollment documents"
+
+Overview of identification questions
+
+National of host country
+
+```{r}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15, ID_00 == 1), ID_01comb, ID_02simp, ID_03simp, ID_04, ID_05, ID_06, ID_06bsimp, popgroup)
+```
+
+National of other country
+```{r}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15, ID_00 == 2), ID_00, ID_01b, ID_02simp, ID_03simp, ID_05, ID_06, ID_06bsimp, popgroup)
+```
+Comparing ID document and proxy classification
+
+Final outcome
+
+Comparing outcome of responses from household head and identification document.
+
+Inclusion error: Classified as refugees: e.g. 310 who have no documents (we don't know if this is really an error, many may have really misplaced documents).
+
+Exclusion error: Not classified as refugees: e.g. 1473 refugees classified as foreigners/600 refugees classified as missing/132 refugees classified as asylum-seekers
+```{r warning = FALSE, message = FALSE}
+ssd_hhroster_15plus <- ssd_hhroster |> filter(ageYears >= 15)
+
+popgroup_ID_09 <- table(ssd_hhroster_15plus$popgroup |> to_factor(), 
+                        ssd_hhroster_15plus$ID_09 |> to_factor())
+
+df_popgroup_ID_09 <- data.frame(popgroup_ID_09) |> 
+  mutate(Var2 = case_when(Var2 == "" ~ "Missing",
+                          TRUE ~ Var2)) |> 
+  pivot_wider(names_from = "Var1", values_from = "Freq") %>%
+  bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total"))) %>%
+  mutate(Total = rowSums(.[-1])) |> 
+  rename("Identification document" = "Var2")
+df_popgroup_ID_09
+#write_xlsx(df_popgroup_ID_09, "Identitification questions crosstabs.xlsx")
+```
+Identification questions and identity document
+
+Non-nationals
+
+```{r}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15), ID_00) 
+```
+Exclusion error due to ID_01b (forced to flee from country of origin): 1220 individuals with refugee documents and 143 individuals with refugee enrollment document who were not forced to flee.
+
+Could be misunderstanding due to specific context in South Sudan. Question reworded for next countries.
+
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15, ID_00 == 2), ID_00, ID_01b)
+```
+Exclusion error due to ID_02 (main reason for fleeing): 245 individuals with refugee documents and 28 individuals with refugee enrollment document whose reason for fleeing provided in the FDS does not classify them as refugees.
+
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15, ID_00 == 2, ID_01b == 1), ID_00, ID_01b, ID_02simp, ID_09)
+```
+Exclusion error due to ID_03 (crossed an international border): 93 individuals with refugee documents and 3 individuals with refugee enrollment document who did not cross an international border after fleeing.
+
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15, ID_00 == 2, ID_01b == 1, ID_02simp == 1), ID_00, ID_01b, ID_03simp)
+```
+Exclusion error due to ID_05 (applied for international protection): 430 individuals with refugee documents and 30 individuals with refugee enrollment document who did not apply for international protection, classified as missing. 135 refugees falsely classfied as AS
+
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15, ID_00 == 2, ID_01b == 1, ID_02simp == 1, ID_03simp == 1), ID_05)
+```
+Exclusion error due to ID_06 (refugee application status): 7 individuals who say they are waiting for response on asylum application but have refugee enrollment document
+
+Inclusion error as refugee: 61 individuals with refugee status granted, but document is for asylum applicant
+
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15, ID_00 == 2, ID_01b == 1, ID_02simp == 1, ID_03simp == 1, ID_05 == 1), ID_00, ID_01b, ID_06bsimp, popgroup, ID_09)
+```
+
+```{r}
+grouped_summary_table(ssd_hhroster |> filter(ageYears >= 15, !is.na(popgroup)), ID_09)
+```
+Individual (random adult) and proxy responses
+
+ID_00: 33 cases where proxy identifies individual as national of other country but individual state they are South Sudanese, 6 cases of the opposite
+
+```{r warning = FALSE, message = FALSE}
+IDcrosstab <- function (var1, var2) {
+
+  tab <- table(ssd_rmember[[var1]] |> 
+          to_factor(),
+        ssd_rmember[[var2]] |> 
+          to_factor())  |>
+    kable(format = 'html') |>
+    kable_styling() |>
+    scroll_box(width = "100%",  box_css = "border: 0px;")
+  
+  tab
+
+}
+
+IDcrosstab("ID_00", "ID_00_random")
+```
+
+ID_01a
+```{r warning = FALSE, message = FALSE}
+IDcrosstab("ID_01a", "ID_01a_random")
+```
+
+ID_01b: Fairly high dispcrepency here, matches high inclusion/exclusion error as above
+```{r warning = FALSE, message = FALSE}
+IDcrosstab("ID_01b", "ID_01b_random")
+```
+
+ID_02
+```{r warning = FALSE, message = FALSE}
+IDcrosstab("ID_02", "ID_02_random")
+```
+
+ID_03
+```{r warning = FALSE, message = FALSE}
+IDcrosstab("ID_03", "ID_03_random")
+```
+
+ID_05
+```{r warning = FALSE, message = FALSE}
+IDcrosstab("ID_05", "ID_05_random")
+```
+
+ID_06b
+```{r warning = FALSE, message = FALSE}
+IDcrosstab("ID_06b", "ID_06b_random")
+```
+
+Individual responses and identity document (random adult)
+
+ID_01b
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_rmember |> filter(ID_00_random == 2), ID_00_random, ID_01b_random, ID_09_random)
+```
+
+Exclusion error due to ID_02 (main reason for fleeing)
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_rmember |> filter(ID_00_random == 2, ID_01b == 1), ID_00_random, ID_01b_random, ID_02_random, ID_09_random)
+```
+
+Exclusion error due to ID_03 (crossed an international border)
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_rmember |> filter(ID_00_random == 2, ID_01b_random == 1, ID_02_random == 1), ID_03_random, ID_09_random)
+```
+
+Exclusion error due to ID_05
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_rmember |> filter(ID_00_random == 2, ID_01b_random == 1, ID_02_random == 1, ID_03_random == 1), ID_05_random, ID_09_random)
+```
+Exclusion error due to ID_06 (refugee application status)
+```{r warning = FALSE, message = FALSE}
+grouped_summary_table(ssd_rmember |> filter(ID_00_random == 2, ID_01b_random == 1, ID_02_random == 1, ID_03_random == 1, ID_05_random == 1), ID_00_random, ID_01b_random, ID_06b_random, ID_09_random)
+```
+

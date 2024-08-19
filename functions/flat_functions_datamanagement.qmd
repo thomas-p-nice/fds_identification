@@ -1,0 +1,733 @@
+---
+title: "Functions for FDS data management South Sudan"
+author: "Sebastian Steinmueller"
+format: html
+execute: 
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r development, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(lubridate)
+```
+
+# rename_df_list
+
+```{r fun-rename_df_list}
+# Rename FDS data files that may contain more specific descriptions (e.g. with country name or year) for generic use in code
+rename_df_list <- function(dataframes) {
+  renamed_df_list <- list()
+  for (df in names(dataframes)) {
+    if (grepl("hhmain", tolower(df))) {
+      renamed_df_list[["hhmain"]] <- dataframes[[df]]
+    } else if (grepl("hhroster", tolower(df))) {
+      renamed_df_list[["hhroster"]] <- dataframes[[df]]
+    } else if (grepl("rmember", tolower(df))) {
+      renamed_df_list[["rmember"]] <- dataframes[[df]]
+    } else if (grepl("cgiver", tolower(df))) {
+      renamed_df_list[["cgiver"]] <- dataframes[[df]]
+    } else if (grepl("rwoman", tolower(df))) {
+      renamed_df_list[["rwoman"]] <- dataframes[[df]]
+    #} else if (grepl("allrespondents", tolower(df))) {
+    #  renamed_df_list[["allrespondents"]] <- dataframes[[df]]
+    } else if (grepl("weights", tolower(df))) {
+      renamed_df_list[["weights"]] <- dataframes[[df]]
+    } else {
+      renamed_df_list[[df]] <- dataframes[[df]]
+    }
+  }
+  return(renamed_df_list)
+}
+```
+
+# import_df
+```{r fun-import_df}
+# Import multiple tables with defined path and pattern at once and rename with rename_df_list function
+
+import_df <- function(path = "data", pattern, file, suffix = "") {
+  files <- list.files(path, pattern, full.names = TRUE)
+  files <- setNames(files, files)
+  
+  if (file == ".dta") {
+  list_files <-  map(files, ~ read_dta(.x)) 
+  } else if (file == ".rds") {
+  list_files <- map(files, ~ read_rds(.x))
+  }
+  
+  list_files <- list_files |> rename_df_list()
+  names(list_files) <- paste0(names(list_files), suffix)
+  
+  list_files |>
+    list2env(envir = .GlobalEnv)
+}
+```
+
+
+# age_from_ym
+
+```{r fun-age_from_ym}
+age_from_ym <- function(dat, birthyear, birthmonth, surveyyear, surveymonth){        
+  dat <- dat |> 
+    unite("birthYearMonth", {{birthyear}}, {{birthmonth}}, sep = "-", remove = F) |> 
+    mutate(birthYearMonth = ym(as.character(birthYearMonth))) |> 
+    unite("currentYearMonth", {{surveyyear}}, {{surveymonth}}, sep = "-", remove = F) |> 
+    mutate(currentYearMonth = ym(as.character(currentYearMonth))) |> 
+    mutate(ageInterval = interval(start = birthYearMonth, end = currentYearMonth)) |>
+    mutate(ageYearsCalc = floor(ageInterval/years())) |> # period time to avoid over-precision (born in same month as survey should be the older year, i.e. assuming birthday within month is on or before day of survey)
+    mutate(ageMonthsCalc = floor((ageInterval/years())*12)) |>
+    select(-ageInterval)
+  dat
+}
+```
+
+# timeinHC_from_ym
+
+```{r fun-timeinHC_from_ym}
+timeinHC_from_ym <- function(dat, arrivalyear, arrivalmonth, surveyyear, surveymonth){        
+  dat <- dat |> 
+    unite("arrivalYearMonth", {{arrivalyear}}, {{arrivalmonth}}, sep = "-", remove = F) |> 
+    mutate(arrivalYearMonth = ym(as.character(arrivalYearMonth))) |> 
+    unite("currentYearMonth", {{surveyyear}}, {{surveymonth}}, sep = "-", remove = F) |> 
+    mutate(currentYearMonth = ym(as.character(currentYearMonth))) |> 
+    mutate(timeinHCInterval = interval(start = arrivalYearMonth, end = currentYearMonth)) |>
+    mutate(yearsinHCCalc = floor(timeinHCInterval/years())) |> # period time to avoid over-precision (born in same month as survey should be the older year, i.e. assuming birthday within month is on or before day of survey)
+    select(-timeinHCInterval)
+  dat
+}
+```
+
+# consolidate_age
+
+```{r fun-consolidate_age}
+consolidate_age <- function(dat, calculatedAge, reportedAge, ageCutOff = 125){
+  dat <- dat |> 
+  mutate(ageYears = case_when(
+        is.na({{calculatedAge}}) | {{calculatedAge}}>ageCutOff ~ {{reportedAge}},
+        !is.na({{calculatedAge}}) & {{calculatedAge}} <= ageCutOff ~ {{calculatedAge}}
+    )
+  ) |> 
+  mutate(ageYears = labelled(ageYears, label = "Age in completed years"))
+  dat
+}
+
+```
+
+# label_fds
+```{r fun-label_fds}
+label_fds <- function(df = ., col_name, label_string, prefixFalse = "No", add_labels = TRUE, false_label = NULL) {
+  labels <- c(label_string, paste0(prefixFalse, " ", tolower(substr(label_string, 1, 1)), substr(label_string, 2, nchar(label_string))))
+  
+  if (!is.null(false_label)) {
+    labels[2] <- false_label
+  }
+
+  if (add_labels == TRUE) {
+    df <- df %>%
+      mutate({{col_name}} := labelled({{col_name}},
+                                      label = label_string,
+                                      setNames(1:2, labels)))
+  } else if (add_labels == FALSE) {
+    df <- df %>%
+      mutate({{col_name}} := labelled({{col_name}},
+                                      label = label_string))
+  }
+
+  return(df)
+}
+
+```
+
+# mutate_bin
+```{r fun-mutate_bin}
+mutate_bin <- function(df, new_var, cond_true, cond_false, label_string, prefixFalse = "No", add_labels = TRUE, add_label = TRUE, false_label = NULL) {
+  new_var <- ensym(new_var)
+  df <- df %>% 
+    mutate(!!new_var := case_when(
+      {{cond_true}},
+      {{cond_false}},
+      TRUE ~ NA_integer_
+    ))
+  
+  # Call the label_fds function within the cond_mutate function only if label is TRUE
+  if (add_label) {
+    df <- label_fds(df, !!new_var, label_string, prefixFalse, add_labels, false_label)
+  }
+
+  return(df)
+}
+```
+
+# convert_time
+```{r fun-convert_time}
+# Convert values recorded as missing to NA and convert hours into minutes
+convert_time <- function(df, new_var, hours_col, minutes_col) {
+  
+  na_vals <- c(c(98, 99, 998))
+  
+  df <- df %>% 
+    mutate({{hours_col}} := case_when(
+      {{hours_col}} %in% na_vals ~ NA_real_,
+      TRUE ~ {{hours_col}})) %>%
+    mutate({{minutes_col}} := case_when(
+      {{minutes_col}} %in% na_vals ~ NA_real_,
+      TRUE ~ {{minutes_col}})) %>%
+    mutate({{hours_col}} := case_when(!is.na({{minutes_col}}) & is.na({{hours_col}}) ~ 0,
+                                    TRUE ~ {{hours_col}})) %>%
+    mutate({{minutes_col}} := case_when(is.na({{minutes_col}}) & !is.na({{hours_col}}) ~ 0,
+                                      TRUE ~ {{minutes_col}})) %>%
+    mutate({{new_var}} := {{hours_col}} * 60 + {{minutes_col}})
+  
+  return(df)
+}
+
+```
+
+# showNA
+```{r fun-showNA}
+showNA <- function(data, var, kable = FALSE) {
+  filtered_data <- data |> 
+    filter(is.na({{var}})) |> 
+    select(`_uuid`,  start,  {{var}}) 
+  
+  if(kable) {
+ 
+  n_NA <- nrow(filtered_data)
+  box_height <- min((75 + n_NA * 50), 300)
+
+  filtered_data <- filtered_data |>
+    kable(format = 'html',
+          caption =  paste0(n_NA, " missing value(s) in ", deparse(substitute(var)), ".")) |>
+    kable_styling(full_width = T) |>
+    scroll_box(width = "100%", height = paste0(box_height, "px"), box_css = "border: 0px;")
+  
+    return(filtered_data)
+  if(nrow(filtered_data) == 0) {
+    return(paste0("No missing values in ", deparse(substitute(var)))) }
+  } else {
+    return(filtered_data)
+  }
+}
+```
+
+
+# showNA_n
+```{r fun-showNA_n}
+showNA_n <- function(data, ...) {
+  vars <- enquos(...)
+  filtered_data <- data |> 
+    filter(if_any(all_of(vars), is.na)) |> 
+    select(`_uuid`, start, !!!vars) 
+
+  n_NA <- nrow(filtered_data)
+  box_height <- min(n_NA * 125, 500)
+
+  filtered_data |>
+    kable(format = 'html', 
+          caption =  paste0("The variables contain ", n_NA, " missing values.")) |>
+    kable_styling(full_width = T) |>
+    scroll_box(width = "100%", height = paste0(box_height, "px"), box_css = "border: 0px;")
+}
+
+```
+
+# merge_NA_tables
+```{r fun-merge_NA_tables}
+merge_NA_tables <- function(tabs, kable = FALSE) {
+  tabs <- discard(tabs, ~nrow(.x) == 0)
+
+  tables_NA <- map(tabs, 
+                    function(df) {
+                      df[is.na(df)] <- 1
+                      return(df)
+                      })
+  
+  merged_tab <- Reduce(function(x, y) merge(x, y, by = c("_uuid", "start"), all = TRUE), tables_NA) |>
+    mutate(total = rowSums(across(where(is.numeric), ~ . == 1), na.rm = T)) |>
+    arrange(desc(total)) %>%
+    rename_with(., ~ paste0("nNA_", .), .cols = where(is.numeric)) |>
+    mutate(across(where(is.numeric), ~ case_when(is.na(.) ~ 0,
+                                         TRUE ~ .)))
+  
+  if(kable) {
+ 
+  n_NA <- nrow(merged_tab)
+  box_height <- min(n_NA * 125, 500)
+
+  merged_tab |>
+    kable(format = 'html', 
+          caption =  paste0("The variables contain ", n_NA, " missing values.")) |>
+    kable_styling(full_width = T) |>
+    scroll_box(width = "100%", height = paste0(box_height, "px"), box_css = "border: 0px;")
+  }
+}
+```
+
+# grouped_summary_table
+```{r fun-grouped_summary_table}
+grouped_summary_table <- function(data, ..., prop = FALSE) {
+  grouping_vars <- enquos(...)
+
+  result <- data |>
+    group_by(!!!grouping_vars) |>
+    summarise(n = n()) |>
+    to_factor() |>
+    ungroup() |> 
+    arrange(desc(n))
+  
+  if (prop) {
+    result <- result |>
+      group_by(!!!grouping_vars[1]) |>
+      mutate(Percent = 100 * n / sum(n)) |>
+      arrange(!!!grouping_vars[1], desc(n)) |>
+      ungroup()
+  }
+  
+  num_rows <- nrow(result)
+  box_height <- min((75 + num_rows * 50), 300)
+
+  result |>
+    kable(format = 'html') |>
+    kable_styling(full_width = TRUE)  |>
+    scroll_box(width = "100%", height = paste0(box_height, "px"), box_css = "border: 0px;")
+}
+```
+
+# thresh_table
+```{r fun-thresh_table}
+thresh_table <- function(data, var, threshold = NULL) {
+  result <- data %>%
+    select(`_uuid`,  start, Intro_03a, Intro_03b, Intro_07_1, {{ var }}) %>%
+    filter({{ var }} > threshold) %>%
+    to_factor()
+
+  num_rows <- nrow(result)
+  box_height <- min(num_rows * 30, 350)
+
+  result %>%
+    kable(format = 'html',
+          caption = paste0("There are ", num_rows, " cases for which ", deparse(substitute(var)), " is larger than ", threshold, ".")) %>%
+    kable_styling() %>%
+    scroll_box(width = "100%", height = paste0(box_height, "px"), box_css = "border: 0px;")
+}
+  
+```
+
+# plot_box
+```{r fun-plot_box}
+plot_box <- function(data, ..., width = NULL) {
+  selected_vars <- enquos(...)
+  gathered_data <- data |>
+    select(!!!selected_vars) |>
+    gather(key = "variable", value = "value", !!!selected_vars) |>
+    mutate(outlier = value > median(value, na.rm = TRUE) + IQR(value, na.rm = TRUE) * 1.5)
+
+
+  if (is.null(width)) {
+    width <- 0.5
+  }
+
+#Plot histogram. Outliers are jittered to prevent overplotting
+  plot_box <- ggplot(gathered_data, aes(x = variable, y = value, fill = variable)) + 
+    geom_boxplot(width = width, outlier.shape = NA) +
+    geom_jitter(data = function(x) filter_(x, ~ outlier), width = 0.2, height = 0.2)
+    labs(x = "", y = "Value")  +
+    theme_unhcr(legend_title = FALSE)
+
+  print(plot_box)
+}
+```
+
+# plot_hist
+```{r fun-plot_hist}
+plot_hist <- function(data, ..., bw = NULL) {
+  selected_vars <- enquos(...)
+  gathered_data <- data |>
+    select(!!!selected_vars) |>
+    gather(key = "variable", value = "value", !!!selected_vars) 
+
+  if (is.null(bw)) {
+    bw <- round(sqrt(max(gathered_data$value, na.rm = TRUE) - min(gathered_data$value, na.rm = TRUE)))
+  }
+
+  plot_hist <- ggplot(gathered_data, aes(x = value, fill = variable)) + 
+    geom_histogram(color = "black", alpha = 0.5, binwidth = bw) +
+    facet_wrap(~variable, ncol = 2, scales = "free_x") +
+    labs(x = "Value", y = "Frequency") +
+    theme_unhcr(legend_title = FALSE) 
+
+  print(plot_hist)
+}
+```
+
+# plot_heatmap
+```{r fun-plot_heatmap}
+plot_heatmap <- function(data, var1, var2, to_factor = TRUE) {
+ 
+x <- data[[deparse(substitute(var1))]]
+x_label <- attr(x, "label")
+
+y <- data[[deparse(substitute(var2))]]
+y_label <- attr(y, "label")
+ 
+  data_grouped <- data |>
+    group_by({{ var1 }}, {{ var2 }}) |> 
+    summarise(`Number of cases` = n()) |>
+    ungroup() |>
+    complete({{ var1 }}, {{ var2 }}, fill = list(`Number of cases` = 0))
+ if (to_factor == TRUE) {
+    data_grouped <- data_grouped |>
+      to_factor()  |>
+      mutate(across(c({{ var1 }}, {{ var2 }}), 
+                    ~case_when(is.na(.) ~ "missing",
+                               TRUE ~ .)))
+    }
+  
+  ggplot(data_grouped, aes({{ var1 }}, fct_rev({{ var2 }}), fill = `Number of cases`)) + 
+    geom_tile() +
+    scale_fill_gradient(low="white", high= unhcr_pal(3, "pal_blue")[3])  +
+    theme_unhcr(legend_title = TRUE) +
+    geom_text(aes(label = `Number of cases`)) +
+      scale_y_discrete(labels = function(x) str_wrap(x, width = 20)) +
+
+    scale_x_discrete(position = "top", labels = function(x) str_wrap(x, width = 10)) +
+    labs(x = x_label, y = y_label) + 
+    theme(legend.position = "bottom")
+}
+```
+
+
+# pivot_wider_fill
+```{r fun-pivot_wider_fill}
+pivot_wider_fill <- function(df, var) {
+  var_l <- deparse(substitute(var))
+  df |>
+    mutate(val = 1) |>
+    pivot_wider(names_from = {{var}}, 
+                values_from = val, 
+                names_prefix = var_l, 
+                values_fill = 2) 
+  }
+```
+
+# pivot_wider_wi
+```{r}
+pivot_wider_wi <- function(df, var) {
+  df %>%
+    select(`_uuid`, var) |>
+    pivot_wider(names_from = var, 
+                values_from = all_of(var), 
+                names_prefix = paste0(var, "_")) |>
+    mutate(across(-1, ~ case_when(is.na(.) ~ 0,
+                                  TRUE ~ 1)))
+}
+```
+
+# food_add0
+```{r fun-food_add0}
+# Set number of days to 0 if households have not experienced a form of food insecurity
+food_add0 <- function(food_var, random_number_food = hhmain$random_number_food_imp) {
+  last_char <- substr(cur_column(), nchar(cur_column()), nchar(cur_column()))
+  food_a <- hhmain[[paste0(sub(last_char, "a", cur_column()))]]
+  
+  if (last_char == "b") {
+    case_when(
+      random_number_food == 1 & food_a == 2 ~ 0,
+      TRUE ~ food_var)
+  } else if (last_char == "c") {
+    case_when(
+      random_number_food == 2 & food_a == 2 ~ 0,
+      TRUE ~ food_var)
+  }
+}
+```
+
+# food_rescale_7_30
+```{r fun-food_rescale_7_30}
+# Rescale values from 7 to 30 day recall period
+food_rescale_7_30 <- function(food_c, variant = 1) {
+  
+  if (variant == 1) {
+  case_when(
+    food_c == 0 ~ 0,
+    food_c %in% c(1) ~ 1,
+    food_c %in% c(2,3) ~ 2,
+    food_c %in% c(4,5,6,7) ~ 3)
+  } else if (variant == 2) {
+  case_when(
+    food_c == 0 ~ 0,
+    food_c %in% c(1,2) ~ 1,
+    food_c %in% c(3,4) ~ 2,
+    food_c %in% c(5,6,7) ~ 3)
+  } else if (variant == 3) {
+  case_when(
+    food_c == 0 ~ 0,
+    food_c %in% c(1,2) ~ 1,
+    food_c %in% c(3,4,5) ~ 2,
+    food_c %in% c(6,7) ~ 3)
+  }
+}
+```
+
+# food_rescale_30_7
+```{r fun-food_rescale_30_7}
+# Rescale values from 30 to 7 day recall period
+food_rescale_30_7 <- function(food_b) {
+  food_b * 7/3
+}
+```
+
+#food_combine_30
+```{r fun-food_combine_30}
+# Combine original and rescaled values in 30 day recall period
+food_combine_30 <- function(food_b) {
+  food_bRescaled <- hhmain[[paste0(cur_column(), "Rescaled")]]
+  
+  case_when(
+    is.na(food_b) & !is.na(food_bRescaled) ~ food_bRescaled,
+    !is.na(food_b) & is.na(food_bRescaled) ~ food_b)
+}
+```
+
+# food_combine_7
+```{r fun-food_combine_7}
+food_combine_7 <- function(food_c) {
+  food_cRescaled <- hhmain[[paste0(cur_column(), "Rescaled")]]
+  
+  case_when(
+    is.na(food_c) & !is.na(food_cRescaled) ~ food_cRescaled,
+    !is.na(food_c) & is.na(food_cRescaled) ~ food_c)
+}
+```
+
+# reshape_merge_hhmain2hhroster
+```{r fun-reshape_merge_hhmain2hhroster}
+# If data on hhmembers are in individual columns of hhmain and need to be merged with hhroster. col_roster should be the name of the variable without the rosterposition identifier, e.g. Legal_13b for Legal_13b1:Legal_13b30
+
+reshape_merge_hhmain2hhroster <- function(col_roster) {
+  hhmain_long <- hhmain %>%
+    mutate(across(all_of(paste0(col_roster, 1:30)), ~ case_when(. == 1 ~ 1,
+                                                                TRUE ~ 2))) |>
+    pivot_longer(cols = all_of(paste0(col_roster, 1:30)), names_to = "rosterposition", values_to = paste0(col_roster, "Roster"))
+
+  hhmain_long$rosterposition <- str_remove(hhmain_long$rosterposition, col_roster) 
+
+  left_join(hhroster, hhmain_long |> select(`_uuid`, rosterposition, paste0(col_roster, "Roster")), by = c("_uuid", "rosterposition"))
+  }
+```
+
+# HHS_cat
+```{r fun-HHS_cat}
+# Create HHS categories
+
+HHS_cat <- function(df, param) {
+  varName <- paste0("HHS", param)
+  
+  df <- df |>
+    mutate(
+      !!paste0(varName, "Cat1") := case_when(
+        !!sym(varName) %in% c(0,1) ~ 1,
+        !!sym(varName) > 1 ~ 2,
+        TRUE ~ NA_real_
+      ),
+      !!paste0(varName, "Cat2") := case_when(
+        !!sym(varName) %in% c(2,3) ~ 1,
+        !!sym(varName) %in% c(0,1,4,5,6) ~ 2,
+        TRUE ~ NA_real_
+      ),
+      !!paste0(varName, "Cat3") := case_when(
+        !!sym(varName) > 3 ~ 1,
+        !!sym(varName) <=3 ~ 2,
+        TRUE ~ NA_real_
+      )
+    )
+  return(df)
+}
+```
+
+# HFIA_cat
+```{r fun-HFIA_cat}
+# Create HFIA categories based on conditions
+HFIA_cat <- function(df, varName) {
+  if (varName == "Orig") {
+    vars <- HFIASOrig_vars
+  } else if (varName == "Rescaled") {
+    vars <- HFIASRescaled_vars
+  } else if (varName == "Combined") {
+    vars <- HFIASCombined_vars
+  }
+  
+  varCat1 <- paste0("HFIA", varName, "Cat1")
+  varCat2 <- paste0("HFIA", varName, "Cat2")
+  varCat3 <- paste0("HFIA", varName, "Cat3")
+  varCat4 <- paste0("HFIA", varName, "Cat4")
+  
+  df <- df %>%
+    mutate(
+      !!varCat1 := case_when(
+        get(vars[1]) %in% c(0, 1) & get(vars[2]) == 0 & get(vars[3]) == 0 & 
+          get(vars[4]) == 0 & get(vars[5]) == 0 & get(vars[6]) == 0 & 
+          get(vars[7]) == 0 & get(vars[8]) == 0 & get(vars[9]) == 0 ~ 1,
+        TRUE ~ NA_real_)) |>
+    mutate(
+      !!varCat2 := case_when(
+        (get(vars[1]) %in% c(2, 3) | get(vars[2])  %in% c(1, 2, 3) | get(vars[3])  == 1 | get(vars[4])  == 1) & 
+          get(vars[5]) == 0 & get(vars[6]) == 0 & get(vars[7]) == 0 & get(vars[8]) == 0 & get(vars[9]) == 0 ~ 1,
+        TRUE ~ NA_real_)) |>
+    mutate(
+      !!varCat3 := case_when(
+        (get(vars[3]) %in% c(2, 3) | get(vars[4]) %in% c(2, 3) | get(vars[5]) %in% c(1, 2) | get(vars[6]) %in% c(1, 2)) &
+          get(vars[7]) == 0 & get(vars[8]) == 0 & get(vars[9]) == 0 ~ 1,
+        TRUE ~ NA_real_)) |>
+    mutate(
+      !!varCat4 := case_when(
+        get(vars[5]) == 3 | get(vars[6]) == 3 | get(vars[7]) %in% c(1, 2, 3) | 
+          get(vars[8]) %in% c(1, 2, 3) | get(vars[9]) %in% c(1, 2, 3) ~ 1,
+        TRUE ~ NA_real_))
+  
+  df <- df %>%
+    mutate(
+      !!varCat1 := case_when(
+        get(varCat1) == 1 & (get(varCat2) == 1 | get(varCat3) == 1 | get(varCat4) == 1) ~ 2,
+        TRUE ~ get(varCat1)
+      ),
+      !!varCat2 := case_when(
+        get(varCat2) == 1 & (get(varCat3) == 1 | get(varCat4)) == 1 ~ 2,
+        TRUE ~ get(varCat2)
+      ),
+      !!varCat3 := case_when(
+        get(varCat3) == 1 & get(varCat4) == 1 ~ 2,
+        TRUE ~ get(varCat3)
+      )
+    )
+  
+  df <- df %>%
+    mutate(across(c(!!varCat1, !!varCat2, !!varCat3, !!varCat4), 
+                  ~ case_when(is.na(.) & (!is.na(get(varCat1)) | !is.na(get(varCat2)) | 
+                                            !is.na(get(varCat3)) | !is.na(get(varCat4))) ~ 2,
+                              TRUE ~ .))) 
+  
+  return(df)
+}
+```
+
+# write_ind_descr
+```{r fun-write_ind_descr}
+# Create new qmd to produce metadata sheet with only indicator descriptions
+write_ind_descr <- function(file) {
+  dmCode <- readLines(file)
+  
+  start_indices <- grep("<!-- descr-start -->", dmCode)
+  end_indices <- grep("<!-- descr-end -->", dmCode)
+  
+  descr <- lapply(seq_along(start_indices), function(i) {
+    dmCode[(start_indices[i] + 1):(end_indices[i] - 1)]
+  })
+  
+  descrComb <-
+    sapply(descr, paste, collapse = "\n") # Import text from indicator descriptions
+  descrComb <- head(descrComb,-1) # Remove last line of code
+  
+  header <- c(
+    "---",
+    "title: \"Description of FDS indicators\"",
+    "author: \"Sebastian Steinmuller, Magrith Mena, Thomas Nice\"",
+    "date: today",
+    "format: docx",
+    "toc: true",
+    "code-fold: true",
+    "code-summary: \"Code\"",
+    "editor: ",
+    "  markdown: ",
+    "    wrap: 72",
+    "---"
+  )
+  
+  writeLines(c(header, descrComb),
+             con = "output/metadata/fds_indicator_description.qmd") # Create new Quarto markdown file containing only selected indicator descriptions
+}
+```
+
+# rds_to_dta
+```{r fun-rds_to_dta}
+# Convert a list of files from rds to dta 
+
+rds_to_dta <- function(df_list, suffix, include_suffix_dta = TRUE, filepath) {
+  
+  import_df("data", suffix, file = ".rds")
+  
+  map(names(df_list), ~ {
+  df_name <- .x
+  df <- df_list[[df_name]]
+  if (include_suffix_dta == TRUE) {
+  write_dta(df, paste0(filepath, df_name, suffix, ".dta"))
+  }  else {
+  write_dta(df, paste0(filepath, df_name, ".dta"))
+    } 
+  })
+}
+```
+
+# filter_workshop_vars
+```{r fun-filter_workshop_vars}
+ filter_workshop_vars <- function(path, pattern, file) {
+  import_df(path, pattern, file)
+  
+  hhmain_workshop <- hhmain |>
+    select(`_uuid`, start, end,
+           wgh_samp_resc_pop,
+           HH_Head_sex, origincountry, 
+           Intro_07_1,
+           c(admin0:disagGroup),
+           childHH, dependentChildHH,
+           drinkingWaterTime, BD01, BD01a, SAN01, SAN05, 
+           HW2_OB, HW3_OB, HW3_OB, HW4_OB,
+           Food01b = Food01bCombined, Food02b = Food02bCombined, Food03b = Food03bCombined,
+           Food04b = Food04bCombined, Food05b = Food05bCombined, Food06b = Food06bCombined,
+           Food07b = Food07bCombined, Food08b = Food08bCombined, Food09b = Food09bCombined,
+           Food10b = Food10bCombined, Food11b = Food11bCombined,
+           Food02cCombined, Food05cCombined, Food06cCombined, Food07cCombined, Food08cCombined,
+           CH01a, CH02a, 
+           ExpShock01, Shock1_ExpShock02, Shock2_ExpShock02, Shock3_ExpShock02, Shock4_ExpShock02)
+  
+  hhroster_workshop <- hhroster |>
+    select(`_uuid`, rosterposition,
+           wgh_samp_resc_pop, Intro_07_1,
+           start, end, c(admin0:disagGroup),
+           Intro_03a,  Intro_03b,
+           HH_02, ageYears,
+           ID_00, cob_name, citizenship_name, 
+           eduLevelHighest, HH_Educ00)
+  
+  rmember_workshop <- rmember |>
+    select(`_uuid`, start, end, Intro_03a,  Intro_03b,
+           Final_01, c(admin0:disagGroup),
+           wgh_pop_rr, calculate_sampled_adult_gender,
+           calculate_sampled_adult_age, ID_00_random, 
+           MovFree01a, MovFree01b, Mob01a, Mob04a,
+           FS01, FS12, FS13, FS14, FS15, c(DI01_01:DI03a_9),
+           FI01, FI02, FI04, FI04A, FI04B, FI04C, FI11_1)
+  
+  rwoman_workshop <- rwoman |>
+    select(`_uuid`, start, end, Intro_03a,  Intro_03b,
+           Final_01, wgh_pop_rw, c(admin0:disagGroup),
+           calculate_sampled_woman_age, BA2, BA4, BA6, BA6_1, BA10)
+  
+  cgiver_workshop <- cgiver |>
+    select(`_uuid`, start, end, Intro_03a,  Intro_03b,
+           Final_01, c(admin0:disagGroup),
+           wgh_pop_u5, current_caregiver_age, 
+           ageMonthsYoungestChild, MV2, MV3, MV7, MV8)
+  
+  saveRDS(hhmain, "data/hhmain_workshop.rds")
+  saveRDS(hhroster, "data/hhroster_workshop.rds")
+  saveRDS(rmember, "data/rmember_workshop.rds")
+  saveRDS(cgiver, "data/cgiver_workshop.rds")
+  saveRDS(rwoman, "data/rwoman_workshop.rds")
+  
+ }
+```
+  
+  
