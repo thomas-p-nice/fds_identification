@@ -39,7 +39,6 @@ library(pins)
 load_flat_functions("functions/flat_functions_datamanagement.qmd", envir = globalenv())
 ```
 
-## Import country data
 ```{r readData}
 #SSD
 ssd_hhroster <- read_rds("data/SSD/hhroster_clean.rds")
