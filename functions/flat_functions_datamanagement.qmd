@@ -267,15 +267,19 @@ merge_NA_tables <- function(tabs, kable = FALSE) {
 
 # grouped_summary_table
 ```{r fun-grouped_summary_table}
-grouped_summary_table <- function(data, ..., prop = FALSE) {
+grouped_summary_table <- function(data, ..., prop = FALSE, output_format = NULL) {
+    if (is.null(output_format)) {
+    output_format <- if (is_latex_output()) "pdf" else "html"
+  }
+  
   grouping_vars <- enquos(...)
 
   result <- data |>
     group_by(!!!grouping_vars) |>
     summarise(n = n()) |>
-    to_factor() |>
-    ungroup() |> 
-    arrange(desc(n))
+    ungroup() |>
+    arrange(desc(n)) |>
+    to_factor() 
   
   if (prop) {
     result <- result |>
@@ -287,11 +291,19 @@ grouped_summary_table <- function(data, ..., prop = FALSE) {
   
   num_rows <- nrow(result)
   box_height <- min((75 + num_rows * 50), 300)
-
-  result |>
-    kable(format = 'html') |>
-    kable_styling(full_width = TRUE)  |>
-    scroll_box(width = "100%", height = paste0(box_height, "px"), box_css = "border: 0px;")
+  
+  if (output_format == "html") {
+    result |>
+      kable(format = 'html') |>
+      kable_styling(full_width = TRUE) |>
+      scroll_box(width = "100%", height = paste0(box_height, "px"), box_css = "border: 0px;")
+  } else if (output_format == "pdf") {
+    result |>
+      kable(format = 'latex', booktabs = TRUE)  |>
+      kable_styling(latex_options = c("hold_position", "scale_down"))
+  } else {
+    stop("Invalid output format. Choose either 'html' or 'pdf'.")
+  }
 }
 ```
 
