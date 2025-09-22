@@ -1,0 +1,64 @@
+---
+title: "flat_functions_id_paper"
+format: html
+---
+
+# fun-tree_plot
+```{r fun-tree_plot}
+# Function for tree plot
+id_tree <- function(df, pop = "Roster", vars) {
+  
+combine_strings <- function(...) {
+  pathString <- paste(na.omit(c(...)), collapse = "/")
+  pathString <- sub("/$", "", pathString)
+  pathString <- gsub("NA/", "", pathString)
+  return(pathString)
+}
+
+data_string <- df |> 
+  filter(ageYears >= 15) |>
+  labelled::to_factor() |>
+  mutate(source = pop) |>
+  select(source, vars) |>
+  mutate(across(everything(), to_factor),
+         across(everything(), ~ case_when(. %in% c("Don't know", "98", "99") ~ "DK", TRUE ~ .))) |> #data.tree can't handle apostrophes
+  rowwise() |>
+  mutate(across(everything(), as.character),
+         pathString = combine_strings(across(everything()))) |>
+  ungroup() 
+  
+data_sum <- data_string |>
+  group_by(pathString)  |>
+  summarise(n = n()) |>
+  to_factor() |>
+  ungroup() |>
+  arrange(desc(n)) |>
+  mutate(pathString = paste(pathString, n, sep = "\n"))
+
+# Set up data.tree object
+data_tree <- as.Node(data_sum)
+
+# Data tree style
+SetGraphStyle(data_tree, rankdir = "LR")
+SetEdgeStyle(data_tree, arrowhead = "vee", color = "grey35", penwidth = 2)
+
+SetConditionalNodeStyle <- function(node) {
+  if (grepl("[0-9]", node$name) & !grepl("NA", node$name)) {
+    SetNodeStyle(node, style = "filled,rounded", shape = "box", fillcolor = "#0072BC", 
+                 fontname = "lato", tooltip = GetDefaultTooltip,
+                 fontcolor = "#FAEB00")
+  } else {
+    SetNodeStyle(node, style = "filled,rounded", shape = "box", fillcolor = "white", 
+                 fontname = "lato", tooltip = GetDefaultTooltip,
+                 fontcolor = "black")
+  }
+}
+
+data_tree$Do(function(node) SetConditionalNodeStyle(node))
+
+tree_plot <- plot(data_tree)
+
+return(data_tree)
+}
+```
+

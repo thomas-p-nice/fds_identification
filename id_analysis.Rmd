@@ -1,0 +1,1337 @@
+---
+title: "A new set of questions to identify forcibly displaced populations in national surveys"
+subtitle: "Findings from three case studies"
+date: "`r format(Sys.Date(),  '%d %B %Y')`"
+output:
+  unhcrdown::docx_simple
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, fig.cap = TRUE, fig.width = 6.27)
+```
+
+```{r packages}
+pacman::p_load(labelled, tibble, tidyverse, tidyr, forcats, readr, readxl, haven, lubridate, kableExtra, fusen, srvyr, gtable, rlang, stringr, purrr, unhcrthemes, writexl, data.tree, DiagrammeR, DiagrammeRsvg, rsvg, knitr, scales, extrafont, scales, knitr, survey, broom, prettyunits, gtools, flextable, officedown, officer, ggalluvial, ggridges) 
+
+loadfonts(device = "win")
+```
+
+```{r}
+load_flat_functions("functions/flat_functions_datamanagement.qmd", envir = globalenv())
+load_flat_functions("functions/flat_functions_id_paper.qmd", envir = globalenv())
+```
+
+```{r data_import}
+roster_id <- read_rds("data/roster_id.rds") |>
+  filter(ageYears >= 15)
+ra_id <- read_rds("data/ra_id.rds")  |>
+  filter(ageYears >= 15)
+```
+
+
+# Introduction
+
+Statistical inclusion of forcibly displaced people (FDPs) in national statistical systems is vital for ensuring their needs and contributions are visible, addressed, and recognized. to achieve this ,  the correct and standardized identification of these groups– and the capacity to distinguish them from the general resident population of a country – is essential  
+
+This ambition aligns with mandates and frameworks established by global organizations and initiatives dedicated to improving data on displacement, mainly the 2030 Agenda for Sustainable Development and its principle of “leaving no one behind” that underpins the Sustainable Development Goals (SDGs). the Global Compact on Refugees (GCR) that emphasizes the importance of data and evidence to support comprehensive refugee responses and encourages host countries to include refugees in national systems and data collection to facilitate durable solutions and equitable resource sharing. And the Global Compact for Migration (GCM): that highlights the importance of robust data collection, analysis, and dissemination to better understand migration trends, including forced migration, and to inform policies that promote safe and orderly migration. 
+
+Work and advocacy is ongoing in international agencies and coordination bodies like UNHCR, the WB/UNHCR Joint Data Center on Forced Displacement and EGRISS to advance the inclusion of FDPs in national statistical systems and develop internationally recognized guidelines and design and harmonize methodologies to improve statistics on forced displacement 
+
+while For statistical purposes, the criteria or conditions that define these groups have been outlined in the International Recommendations on Refugee and IDP Statistics (IRRS and IRIS respectively), and endorsed   by the UNSD in 2018 and 2020authoritative guidance on how these criteria should be transformed into survey questions remains unavailable. Clarifying, standardizing, and streamlining the set of questions that can identify these groups in household (**Comment LR: we add a  footnote that specifies the groups?**) surveys will fill important guidance gaps that both governments and international survey programs have identified. 
+
+UNHCR launched in 2021 its Forced Displacement Survey, XXX and designed a set of questions based on the criteria laid out in the International Recommendations aimed at identifying such population groups and a paper was published by EGRISS in 2023 to describe the set of questions.  
+
+The Recommendations provide the theoretical framework and Methodological Paper describe the  starting point for this work, the FDS continued to refine and improve the questions based on findings of 3 case studies or countries where the FDS was initially implemented and to address  the ambiguities reported from field testing. 
+
+Background on the FDS… The FDS sampling frame consists of registered refugees and asylum seekers whose records are maintained by UNHCR and who own documents testifying their legal status i.e. being a recognized refugee or an asylum seeker. .  
+
+The set of questions based on criteria or data points recommended by EGRISS/IRRS was developed in the frame of the FDS, and offers a good opportunity to see how it performs against the documentation item.
+
+## Objective
+
+This paper is a methodological exploration. We test a set of questions on refugee status identification to ensure that they reflect the international recommendations and their criteria-based approach. We thereby assess to what extent the contents and wording of the questions contribute to correctly labeling respondents' legal status in household surveys, and where they fall short. The set of questions tested in the three FDS pilot countries underwent revisions and refinement based on the findings of previous rounds of the FDS, meaning that we can evaluate the changes and their effects on identifying refugees.
+
+We also examine where to place the set of questions in a survey administered to multiple respondents per household. The analysis compares the outcomes of the set administered to the head of household about all household members, or to a proxy respondent, and administered to a respondent about him or herself. The analysis used three FDS datasets collected in South Sudan, Pakistan, and Cameroon. 
+
+Our analysis is guided by the following research questions:
+
+- Are refugee card holders responding the the criteria-based questions as expected?
+
+- What are the profiles of those individuals who do not respond as their legal status would suggest they should? Demographic and some other indicators.
+
+- Does it make a difference if people respond for themselves or if responses come from a proxy (head of household)? What is the most appropriate placement of the set?
+
+This paper only addresses refugees, not all forced to flee. This is because recognised refugees and asylum seekers have a document that proves their legal status, as opposed to IDPs, whose condition does not translate into a legal status. As a result, there is not a recognised document to compare the outcome of the set of questions to.  
+
+In the next section we assess the outcome of each question in the set of identification questions for the supgroup of respondents in the FDS who own of a valid refugee document. For these individuals, we would expect the individuals to respond to the identification questions in a way that they would fit the criteria of a refugee. In those cases where the responses do not fit the criteria, we aim to understand why not. Following that, we compare the outcomes of the identification questions when the respondent is a proxy (the household head or most knowledgeable member of the household) or when the individual themselves.
+
+## Identification cascade
+
+Table @ref(tab:tab-questions) provides an overview of the questions in the identification module by survey country.^[See the annex for an overview of the identification questions in English, Arabic for South Sudan, Urdu for Pakistan, and French for Cameroon.] The questions were adjusted in subsequent surveys, based upon the issues flagged during analysis of the identification modules. For greater clarity, the wording of some questions was simplified (questions 1, 3, and 4). Additionally, two recovery questions were introduced to offer alternative phrasing in case the initial wording was misunderstood (questions 1b and 2b).
+
+```{r tab-questions tab.ca "Overview of the questions in the identification module by FDS country}
+questions <- read_excel("questions.xlsx")
+
+ft <- flextable(questions)
+# Customize the flextable
+ft <- ft %>%
+  merge_v(j = 1) %>%
+  theme_vanilla() %>%
+  set_header_labels(
+    Question = "Question",
+    South_Sudan = "South Sudan",
+    Pakistan = "Pakistan",
+    Cameroon = "Cameroon"
+  ) %>%
+  merge_h(part = "header") %>%
+  align(j = 1, align = "left", part = "all") %>%
+  align(j = 2:4, align = "center", part = "all") %>%
+  autofit() %>%
+  merge_at(i = 1, j = 3:4, part = "body")  %>%
+  merge_at(i = 2, j = 3:4, part = "body")  %>%
+  merge_at(i = 3, j = 3:4, part = "body") %>%
+  merge_at(i = 5, j = 3:4, part = "body") %>%
+  merge_at(i = 6, j = 3:4, part = "body") %>%
+  merge_at(i = 8, j = 2:4, part = "body")  %>%
+  merge_at(i = 9, j = 2:4, part = "body") %>%
+  border_inner_v(border = fp_border(color = "black", width = 1))  %>%
+  border_outer(border = fp_border(color = "black", width = 1))  %>%
+  width(j = 2:4, width = 2)
+
+ft
+```
+
+
+```{r roster_tree_plot}
+# id_vars_ssd <- c(
+#   "ID_00", "ID_01a", "ID_01a", "ID_02", "ID_03", "ID_04",
+#   "ID_05", "ID_06", "ID_06b", "ID_09Ref"#,"popgroup"
+#   )
+# 
+# roster_tree_ssd <- id_tree(df = roster_id |> filter(Country == "South Sudan"), pop = "Roster", vars = id_vars_ssd)
+# 
+# # Create a function to handle the tree diagram creation and export
+# create_id_tree_diagram <- function(df, pop, vars) {
+#   # Create the tree using your existing id_tree function
+#   tree <- id_tree(df = df |> filter(Country == "South Sudan"), 
+#                   pop = pop, 
+#                   vars = vars)
+#   
+#   # Convert to DiagrammeR graph
+#   graph <- ToDiagrammeRGraph(tree)
+#   
+#   # Export as SVG first
+#   svg_content <- DiagrammeRsvg::export_svg(graph)
+#   
+#   # Convert SVG to PNG for better compatibility
+#   png_file <- "roster_tree_ssd.png"
+#   rsvg::rsvg_png(charToRaw(svg_content), png_file)
+#   
+#   # Return the file path
+#   return(png_file)
+# }
+
+#export_graph(ToDiagrammeRGraph(roster_tree_ssd), "roster_tree_ssd.pdf")
+```
+
+```{r roster_tree_ssd}
+#include_graphics("roster_tree_ssd.pdf")
+```
+
+### Overview
+
+First, we show the share of individuals with recognised refugee documents who remain in the cascade of identification questions after each question in the household roster. We examine the responses by the respondent to the main household questionnaire (typically the head of the household) as a proxy for all household members as well as the responses by the randomly selected adult/woman. In South Sudan and Cameroon, the randomly selected adult responded to the identification questions, in Pakistan this was the random woman. This is because in Pakistan, only refugees were selected as the randomly selected adult in refugee households. In South Sudan and Cameroon, there was not this restriction. *Also need to define refugee households*.  
+
+The identification questions examined here are for household members over 15. Table @ref(tab:tab-summary) shows the size of the sample of over 15-year olds in the roster and randomly selected adults/women (one per household) with a valid refugee document.
+
+*SHOULD WE INCLUDE THE MISSING QUESTIONS ON COUNTRY OF BIRTH, INTENTION TO APPLY FOR INTNL PROTECTION*
+```{r tab-summary, tab.cap="Sampled 15-year olds with a valid refugee document, by country and questionnaire"}
+dat_n <- function(dat, questionnaire_name, ref_id_var) {
+  dat |> 
+    filter(ageYears >= 15, {{ref_id_var}} == "1") |>
+    group_by(Country) |>
+    summarise(n = n()) |>
+    mutate(Questionnaire = questionnaire_name) 
+}
+
+summary_n <- bind_rows(dat_n(roster_id, "Roster", ID_09Ref),
+                       dat_n(ra_id, "Random adult/woman", ID_09RARef)) |>
+  pivot_wider(names_from = Questionnaire, values_from = n)
+
+summary_n |>
+  flextable() |>
+  fontsize(size = 9, part = "all") |> 
+  bold(part = "head")
+```
+
+
+For all three countries, a share of individuals with refugee cards drop out of the cascade of identification questions because the proxy/they do not respond as expected to be classified as refugees, namely: that they were forced to flee for a reason that requires international protection, crossed a national border, applied for protection and their refugee status was recognised. In the following, each question is examined in detail.
+
+```{r tab.cap="Proportion of individuals remaining in the identification cascade after each question, roster"}
+# Function to create table with two columns: country and number of observations for specific variable == 1
+cascade_n <- function(df, var) {
+  df |> 
+    filter(ageYears >= 15) |>
+  group_by(Country, {{var}}) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  filter({{var}} == "1") |>
+  labelled::to_factor() |>
+  pivot_wider(names_from = {{var}}, values_from = n)
+}
+
+cascade_roster_l <- list()
+
+# Valid refugee document
+cascade_roster_l$valid_ref_doc <- roster_id |> 
+    filter(ageYears >= 15) |>
+  group_by(Country, ID_09Ref) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  filter(ID_09Ref == "1") |>
+  labelled::to_factor() |>
+  pivot_wider(names_from = ID_09Ref, values_from = n) 
+
+# Valid refugee document & forced to flee
+cascade_roster_l$forced_to_flee <- cascade_n(roster_id |>
+                                           filter(ID_09Ref == "1"), ID_01b)
+
+cascade_roster_l$forced_to_abandon <- cascade_n(roster_id |>
+                                           filter(ID_09Ref == "1"), ID_01b_2)
+
+# Valid refugee document, forced to flee & fled for valid reason
+cascade_roster_l$valid_reason <- cascade_n(roster_id |>
+                                         filter(ID_09Ref == "1"), ID_02_valid)
+
+# Valid refugee document, forced to flee & fled for valid reason
+cascade_roster_l$valid_reason_rec <- cascade_n(roster_id |>
+                                         filter(ID_09Ref == "1"), ID_02b_valid)
+
+# Valid refugee document, forced to flee & fled for valid reason/recovery question
+cascade_roster_l$valid_reason <- cascade_n(roster_id |>
+                             filter(ID_09Ref == "1"), 
+                           ID_02_valid)
+
+# Valid refugee document, forced to flee, fled for valid reason & crossed an international border
+cascade_roster_l$crossed_border <- cascade_n(roster_id |>
+                             filter(ID_09Ref == "1"), 
+                           ID_03_simp)
+# Valid refugee document, forced to flee, fled for valid reason, crossed an international border & applied for protection
+cascade_roster_l$appl_protection <- cascade_n(roster_id |>
+                             filter(ID_09Ref == "1"), 
+                           ID_05_simp)
+# Valid refugee document, forced to flee, fled for valid reason, crossed an international border, applied for protection & positive outcome
+cascade_roster_l$pos_protection <- cascade_n(roster_id |>
+                             filter(ID_09Ref == "1"), 
+                           ID_06b)
+
+# Combine dataframes
+cascade_roster <- reduce(cascade_roster_l, full_join, by = "Country") 
+cascade_roster_prop <- cascade_roster %>%
+  mutate(across(where(is.numeric), ~ . / `Valid refugee document`))
+
+
+# Calculate percentages
+# cascade_roster_prop %>%
+#   mutate(across(where(is.numeric), ~ percent(., accuracy = 2))) |>
+#   flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+
+```{r tab.cap="Proportion of individuals remaining in the identification cascade after each question, random adult"}
+#`r ra_cascade_prop |> filter(Country == "Pakistan") |> pull(3)`
+cascade_ra_l <- list()
+
+# Valid refugee document
+cascade_ra_l$valid_ref_doc <- ra_id |>
+  filter(ageYears >= 15) |>
+  group_by(Country, ID_09RARef) |>
+  summarise(n = n()) |>
+  ungroup() |>
+  filter(ID_09RARef == "1") |>
+  labelled::to_factor() |>
+  pivot_wider(names_from = ID_09RARef, values_from = n)
+
+# Valid refugee document & forced to flee
+cascade_ra_l$forced_to_flee <- cascade_n(ra_id |>
+                                           filter(ID_09RARef == "1"), ID_01bRA)
+
+cascade_ra_l$forced_to_abandon <- cascade_n(ra_id |>
+                                           filter(ID_09RARef == "1"), ID_01b_2RA)
+
+# Valid refugee document, forced to flee & fled for valid reason
+cascade_ra_l$valid_reason <- cascade_n(ra_id |>
+                                         filter(ID_09RARef == "1"), ID_02_validRA)
+
+# Recovery question
+cascade_ra_l$valid_reason_rec <- cascade_n(ra_id |>
+                                         filter(ID_09RARef == "1"), ID_02b_validRA) 
+
+# Valid refugee document, forced to flee, fled for valid reason & crossed an international border
+cascade_ra_l$crossed_border <- cascade_n(ra_id |>
+                                           filter(ID_09RARef == "1"), ID_03_simpRA)
+# Valid refugee document, forced to flee, fled for valid reason, crossed an international border & applied for protection
+cascade_ra_l$appl_protection <- cascade_n(ra_id |>
+                                            filter(ID_09RARef == "1"), ID_05_simpRA)
+# Valid refugee document, forced to flee, fled for valid reason, crossed an international border, applied for protection & positive outcome
+cascade_ra_l$pos_protection <- cascade_n(ra_id |>
+                                           filter(ID_09RARef == "1"), ID_06bRA)
+
+# Combine dataframes
+ra_cascade <- reduce(cascade_ra_l, full_join, by = "Country")
+
+# Calculate percentages
+ra_cascade_prop <- ra_cascade %>%
+  mutate(across(where(is.numeric), ~ . / `Valid refugee document`))
+# ra_cascade_prop %>%
+#   mutate(across(where(is.numeric), ~ percent(. / `Valid refugee document`))) |>
+#   flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head") |> bold(part = "head")
+```
+
+```{r fig.cap="Proportion of individuals remaining in the identification cascade after each question", fig.height=10, fig.width = 8}
+cascade_prop <- bind_rows(
+  cascade_roster_prop |> mutate(dat = "Roster"),
+  ra_cascade_prop |>  mutate(dat = "Random adult/woman")
+) |>
+  mutate(
+    `Had to flee/abandon home (recovery)` = `Had to flee` + `Had to abandon home`,
+    `Required international protection (recovery)` =  `Required international protection` +
+      `Required international protection (recovery question)`
+  ) |>
+  select(-`Had to abandon home`,-`Required international protection (recovery question)`) |>
+  select(dat, everything()) |>
+  mutate(`Required international protection (recovery)` = case_when(Country == "Cameroon" & dat == "Random adult/woman" & is.na(`Required international protection (recovery)`) ~ `Required international protection`, TRUE ~ `Required international protection (recovery)`)) |>
+  pivot_longer(`Valid refugee document`:`Required international protection (recovery)`) 
+
+level_order <- c(
+  "Valid refugee document",
+  "Had to flee",
+  "Had to flee/abandon home (recovery)",
+  "Required international protection",
+  "Required international protection (recovery)",
+  "Crossed border",
+  "Applied for international protection/prima facie recognition",
+  "Refugee status granted"
+)
+
+cascade_prop  |>
+  filter(!is.na(value)) |>
+  mutate(name = factor(name, levels = level_order),
+         Country = factor(Country, levels = c("South Sudan", "Pakistan", "Cameroon")),
+         dat = factor(dat, levels = c("Roster", "Random adult/woman"))) |>
+  ggplot(aes(x = name, y = value*100, 
+             color = dat, group = dat))  +
+  geom_rect(data = . %>% filter(Country != "South Sudan"),
+            aes(xmin = 1.75, xmax = 2.25, ymin = -Inf, ymax = Inf),
+            alpha = 0.5, fill = "#FFE7E8", color = "#FFE7E8")  +
+  geom_rect(data = . %>% filter(Country != "South Sudan"),
+            aes(xmin = 6.75, xmax = 7.25, ymin = -Inf, ymax = Inf),
+            alpha = 0.5, fill = "#FFE7E8", color = "#FFE7E8") + 
+  geom_rect(data = . %>% filter(Country != "South Sudan"),
+            aes(xmin = 2.75, xmax = 3.25, ymin = -Inf, ymax = Inf),
+            alpha = 0.5, fill = "#DCE9FF", color = "#DCE9FF")  +
+  geom_rect(data = . %>% filter(Country != "South Sudan"),
+            aes(xmin = 3.75, xmax = 4.25, ymin = -Inf, ymax = Inf),
+            alpha = 0.5, fill = "#FFE7E8", color = "#FFE7E8")  +
+  geom_rect(data = . %>% filter(Country == "Cameroon"),
+            aes(xmin = 4.75, xmax = 5.25, ymin = -Inf, ymax = Inf),
+            alpha = 0.5, fill = "#DCE9FF", color = "#DCE9FF") +
+  geom_rect(data = . %>% filter(Country != "South Sudan"),
+            aes(xmin = 5.75, xmax = 6.25, ymin = -Inf, ymax = Inf),
+            alpha = 0.5, fill = "#FFE7E8", color = "#FFE7E8")  +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, size = 1.5) +  # Add this line for a thicker x-axis line at 0
+  scale_color_unhcr_d() +
+  scale_y_continuous(limits = c(0, 100),
+                     breaks = seq(0, 100, by = 20),
+                     labels = function(x) paste0(x, "%"), 
+                     expand = expansion(c(0, 0.1))) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 15)) +
+  labs(x = NULL,
+       y = "Remaining",
+       color = "Country",
+       caption = "Blue shading denotes recovery questions added following the first FDS pilot, red shading denotes reworded questions") +
+  theme_unhcr(axis = "x") +
+  theme(axis.text.x = element_text(hjust = 0.5),
+        panel.grid.major.y = element_line(size = 0.5, linetype = 'solid', color = 'grey80'),
+        panel.grid.major.x = element_blank()) +
+  facet_wrap(~ Country, nrow = 3)
+```
+
+```{r}
+roster_id <- roster_id |>
+  mutate(ID_02b = case_when(ID_02b %in% c("5", "6", "7") ~ "5",
+                            TRUE ~ ID_02b),
+         ID_02b = labelled(ID_02b, 
+                           labels = c("Security, conflict, violence" = "1",
+                                      "Fear of persecution" = "2",
+                                      "Human rights violation" = "3",
+                                      "Natural or man-made disaster" = "4",
+                                      "Personal reasons" = "5",
+                                      "Don't know" = "98",
+                                      "Refuse to answer" = "99")))
+  
+alluvial_df <- roster_id |>
+  filter(ID_09Ref == "1") |>
+  group_by(Country, ID_01b_combine, ID_02, ID_02b, ID_03, ID_05, ID_06b) |>
+  summarise(n = n()) |>
+  ungroup() |>
+  to_factor() %>%
+  mutate(
+    ID_01b_combine = factor(
+      ID_01b_combine,
+      levels = c("Never had to flee/abandon home", "Had to flee/abandon home")
+    ),
+    ID_02 = factor(
+      ID_02,
+      levels = c(
+        "Personal reasons",
+        "Natural/man-made disaster",
+        "Don't know",
+        "Refuse to answer",
+        "Security, conflict, violence",
+        "Fear of persecution",
+        "Human rights violation"
+      )
+    ),
+    ID_02b = factor(
+      ID_02b,
+      levels = c(
+        "Personal reasons",
+        "Natural/man-made disaster",
+        "Don't know",
+        "Refuse to answer",
+        "Security, conflict, violence",
+        "Fear of persecution",
+        "Human rights violation"
+      )
+    ),
+    ID_03 = factor(ID_03, levels = c("No", "Yes")),
+    ID_05 = factor(ID_05, levels = c("No", "Yes")),
+    complete_case = if_else(complete.cases(select(., -ID_02b)), "1", "0")
+  )
+
+
+alluvial_df <- alluvial_df |> mutate(ID_02comb = case_when(is.na(ID_02) ~ ID_02b, TRUE ~ ID_02))
+
+alluvial_plot <- function(country_code) {
+  ggplot(
+    data = alluvial_df |> filter(Country == country_code),
+    aes(
+      axis1 = ID_01b_combine,
+      axis2 =  ID_02comb,
+      axis3 = ID_03,
+      axis4 = ID_05,
+      axis5 = ID_06b,
+      y = n
+    )
+  ) +
+    geom_stratum(aes(fill = complete_case), width = 0.3) +
+    #geom_alluvium() +
+    geom_text(
+      stat = "stratum",
+      aes(label = after_stat(str_wrap(stratum, 20))),
+      data = function(x)
+        subset(x, n > 300),
+      size = 3
+    ) +
+    theme_minimal() +
+    scale_y_continuous(expand = expansion(c(0, 0.1))) +
+    theme_unhcr(
+      axis_text = "x",
+      axis = "x",
+      axis_title = FALSE,
+      grid = "",
+      legend = FALSE
+    ) +
+    scale_x_discrete(
+      limits = c(
+        "Had to flee/\nabandon home",
+        "Reason for\nfleeing",
+        "Crossed\nborder",
+        "Applied\nfor protection",
+        "Protection\noutcome"
+      )
+    ) +
+    scale_fill_unhcr_d(na.value = unhcr_pal(2, "pal_unhcr")[2])
+}
+```
+
+### 1 Fleeing or abandoning home
+
+> *"While living here/abroad, have you ever had to flee home?"*
+
+```{r}
+# Check COB
+roster_ref_neverFlee <- roster_id |>
+  filter(ID_09Ref == "1", ID_01b_combine == "2") |>
+  group_by(Country, cob) |> 
+  summarise(n = n()) |>
+  ungroup()  |>
+  labelled::to_factor() |>
+  filter(!is.na(cob)) |>
+  pivot_wider(values_from = n, names_from = cob)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0)))  |> 
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-`row_total`, -`row_total %`)
+
+roster_id |>
+  filter(ID_09Ref == "1") |>
+  filter(Country == "South Sudan")|>
+  group_by(Country, Intro_03b_NUTS2, ID_01b_combine) |> 
+  summarise(n = n()) |>
+  group_by(Country, Intro_03b_NUTS2) |>  
+  mutate(`%` = percent(n/sum(n), accuracy = 1)) |>
+  ungroup()
+```
+
+
+```{r}
+# Calculate table for recovery question
+ID_01b_recovery <- roster_id |>
+  filter(ageYears >= 15, ID_09Ref == "1", cob != "1", Country != "South Sudan", ID_01b != "1", !is.na(ID_01b)) |>
+  group_by(Country, ID_01b, ID_01b_2) |>
+  summarise(Count = n()) |> 
+  ungroup() |>
+  group_by(Country, ID_01b) |>
+  mutate(`%` = percent(Count/sum(Count), accuracy = 1)) |>
+  ungroup() |>
+  to_factor()
+```
+
+The first question we look at in the identification cascade is if the respondent was forced to flee. 
+In South Sudan, `r percent(1-cascade_prop |> filter(Country == "South Sudan", dat == "Roster", name == "Had to flee") |> select(value) |> pull())` responded that they did not have to flee. The majority of individuals who responded that they never had to flee were born abroad (`r roster_ref_neverFlee |> filter(Country == "South Sudan") |> select("Other country %") |> pull() |> percent()`, perhaps indicating for example that "fleeing" was not properly understood. *Check date of birth if before or after independence) and distribution among the 30%*
+
+In Pakistan, learning from the experience in South Sudan, a recovery question was introduced with a different phrasing to recuperate respondents who did not self-identify as having been forced to flee. “Abandoning home” was used as a recovery term/question for those who answered “no” to the wording “flee”. In Pakistan and Cameroon, a recovery question was introduced. In addition to the first question, the surveys include the question: 
+
+> *"While living outside {country}, {have you/has ...} ever had to abandon your home? Home is your house and/or land."*
+
+This was asked to those individuals who do not say "yes" to the first question. The reason for doing this was that the concept of "fleeing" may be unclear and that the alternative phrasing with "abandoning" could capture diverse displacement histories. *Add literature*. 
+
+Even then, `r percent(1-cascade_prop |> filter(Country == "Pakistan", dat == "Roster", name == "Had to flee/abandon home (recovery)") |> select(value) |> pull())` of individuals in the roster with refugee cards responded that they never had to flee or abandon their homes. The recovery question did not change this, capturing  `r ID_01b_recovery |> filter(Country == "Pakistan", ID_01b_2 == "Had to abandon home") |> select("%") |> pull()` of households that said they did not have to flee, but responded that they had to abandon their homes. The large majority (`r roster_ref_neverFlee |> filter(Country == "Pakistan") |> select("Host country %") |> pull() |> percent()`) of individuals with refugee cards who state that they did not flee or abandon their homes were born in Pakistan, highlighting the protracted nature of displacement there. Figure @ref(fig:fig-age_flee) shows that those who respond that they were not forced to flee or abandon their homes are on average significantly younger than those that were.^[Note that even though the share of respondents who were forced to flee or abandon their homes is so small, as the roster size is so large in Pakistan due to the large household size, the roster sample is of a similar size as in South Sudan and Cameroon, where household are smaller on average.]
+
+```{r fig-age_flee, fig.cap = "Age and response to being forced to flee or abandon home", fig.asp=.4}
+ggplot(roster_id |>
+         filter(ageYears >= 15, ageYears < 99), 
+       aes(x = as.numeric(ageYears), 
+           y = str_wrap(to_factor(ID_01b_combine), 20), fill = ID_01b_combine)) +
+  geom_density_ridges() +
+  facet_wrap(~ Country, scales = "free_x") +
+  labs(x = "Age",
+       y = "") +
+  theme_unhcr() +
+  theme_unhcr(grid = "y", axis = "x") +
+  theme(legend.position = "none") + 
+  scale_fill_unhcr_d() +
+  scale_y_discrete(
+    expand = expansion(c(0, 0.1)))
+```
+
+**Comment LR: Based on this, we should not ask the set to those non nationals born in country**
+
+In Cameroon, the share of individuals with refugee cards for whom the response by the proxy was that they never had to flee is smaller, at `r percent(1-cascade_prop |> filter(Country == "Cameroon", dat == "Roster", name == "Had to flee/abandon home (recovery)") |> pull())`. The recovery question led to the inclusion of some individuals who would otherwise drop out of the identification cascade. In Cameroon, `r ID_01b_recovery |> filter(Country == "Cameroon", "ID_01b_2" == "Had to abandon home") |> select("%") |> pull()` of proxy responses that the individual did not have to flee, were then "yes". The majority of those individuals who responded that they never had to flee or abandon their homes were born abroad (`r roster_ref_neverFlee |> filter(Country == "CMR") |> select("Other country %") |> pull() |> percent()`.
+
+**To add: refugee parents**
+
+```{r fig.cap = "Country of birth of individuals with a refugee document who did not have to flee or abandon their home", fig.asp=.4}
+roster_ref_neverFlee |>
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head") 
+
+roster_ref_neverFlee <- roster_ref_neverFlee |>
+  select(Country, contains("%")) |>
+  rename_all(~ gsub(" %", "", .)) |>
+  pivot_longer(`Host country`:`Stateless`)
+
+ggplot(roster_ref_neverFlee, aes(
+  x = value,
+  y = Country,
+  fill = reorder(factor(name), value)
+)) +
+  geom_col(width = 0.7) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0, .1)),
+    labels = scales::label_percent()
+  ) +
+  scale_fill_unhcr_d(
+    palette = "pal_unhcr"
+    #nmax = 10,
+    #order = c(3, 1, 9),
+    #labels = c("Asylum-seekers", "Refugees", "Other people in need of\ninternational protection")
+  )+
+  theme_unhcr(grid = "X", axis = "y", axis_title = FALSE)
+```
+
+```{r tab.cap = "Fleeing or abandoning home, by sex, roster", fig.asp=.3}
+reason_sex_1 <- roster_id |>
+  filter(ID_09Ref == "1", !is.na(sex)) |>
+  group_by(Country, ID_01b_combine, sex) |> 
+  summarise(n = n()) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  group_by(Country, sex) |>
+  mutate(prop = n/sum(n))
+  
+reason_sex_1  |>
+  filter(ID_01b_combine == "Had to flee/abandon home") |>
+  mutate(Country = factor(Country, levels = c("South Sudan", "Pakistan", "Cameroon"))) |>
+  ggplot(aes(x = fct_rev(Country), y = prop*100, 
+             fill = sex)) +
+  geom_col(width = 0.7, position = "dodge") +
+  scale_fill_unhcr_d() +
+  scale_y_continuous(limits = c(0, 100),
+                     breaks = seq(0, 100, by = 20),
+                     labels = function(x) paste0(x, "%"), 
+                     expand = expansion(c(0, 0.1))) +
+  labs(x = NULL,
+       y = "% of individuals with a refugee card") +
+  theme_unhcr(axis = "y") +
+  theme(axis.text.x = element_text(hjust = 0.5),
+        panel.grid.major.x = element_line(size = 0.5, linetype = 'solid', color = 'grey80'),
+        panel.grid.major.y = element_blank()) +
+  coord_flip()
+```
+
+```{r fig.cap="Recovery question fleeing/abandoning home, proxy responses for individuals with a refugee document born abroad"}
+
+ID_0b_id_piv <- roster_id |>
+  filter(ID_09Ref == "1", Country != "South Sudan") |>
+  select(Country, ID_01b, ID_01b_2) |>
+  to_factor() |>
+  mutate(ID_01b_2 = case_when(ID_01b == "Had to flee" ~ NA_character_,
+                              TRUE ~ ID_01b_2)) |>
+  pivot_longer(cols = c(ID_01b, ID_01b_2), names_to = "var", values_to = "val") |>
+  filter(!is.na(val)) |>
+  mutate(val = case_when(val %in% c("Had to flee", "Had to abandon home") ~ "Yes", TRUE ~ "No"),
+         val = fct_relevel(val, "Yes", "No"))
+
+
+ggplot(ID_0b_id_piv, aes(x = var, fill = val)) +
+  geom_bar(width = .4) +
+  scale_fill_unhcr_d(palette = "pal_unhcr", nmax = 2, order = c(2, 1)) +
+  scale_y_continuous(
+    expand = expansion(c(0, 0.2)),
+  ) +
+  scale_x_discrete(labels = c("ID_01b" = "Forced to\nflee", "ID_01b_2" = "Forced to\nabandon home")) +
+  theme_unhcr(grid = "", axis = "x", axis_title = FALSE) +
+  theme(panel.grid.major.y = element_line(size = 0.5, linetype = 'solid', color = 'grey80'),
+) +
+  facet_wrap(~ Country, scales = "free_y")
+```
+
+Comparing responses by date of arrival, there is a large difference in the frequencies for the arrivals to South Sudan since around 2011. The more recent arrivals are far more likely to say that they never had to flee or abandon their home. **Why?** In Pakistan and Cameroon, there is no clear relationship between the responses on being forced to flee or leave home by arrival time.
+  
+```{r fig.cap = "Year of arrival and response to being forced to flee or abandon home", fig.asp=.4}
+ggplot(roster_id |> filter(as.numeric(arrivalYear) > 1950), aes(x = as.numeric(arrivalYear), y = str_wrap(to_factor(ID_01b_combine), 20), fill = ID_01b_combine)) +
+  geom_density_ridges(bandwidth = 0.9) +
+  facet_wrap(~ Country, scales = "free_x") +
+  labs(x = "Arrival year",
+       y = "") +
+  theme_unhcr() +
+  theme_unhcr(grid = "y", axis = "x") +
+  theme(legend.position = "none") + 
+  scale_fill_unhcr_d() +
+  scale_y_discrete(
+    expand = expansion(c(0, 0.1)))
+```
+
+```{r}
+ra_ref_neverFlee <- ra_id |>
+  filter(ID_09RARef == "1", ID_01b_combineRA == "2") |>
+  group_by(Country, cob) |> 
+  summarise(n = n()) |>
+  ungroup()  |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = cob)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0)))  |> 
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-`row_total`, -`row_total %`)
+```
+
+```{r}
+# Calculate table for recovery question
+ID_01bRA_recovery <- ra_id |>
+  filter(ageYears >= 15, ID_09RARef == "1", cob != "1", Country != "South Sudan", ID_01bRA != "1", !is.na(ID_01bRA)) |>
+  group_by(Country, ID_01bRA, ID_01b_2RA) |>
+  summarise(Count = n()) |> 
+  ungroup() |>
+  group_by(Country, ID_01bRA) |>
+  mutate(`%` = percent(Count/sum(Count), accuracy = 1)) |>
+  ungroup() |>
+  to_factor()
+```
+
+The results for the randomly selected adult/woman who responded for themselves are very similar to those for roster. In Cameroon, the recovery question proved particularly successful among the randomly selected adults, capturing `r ID_01bRA_recovery |> filter(Country == "Cameroon", ID_01b_2RA == "Had to abandon home") |> select("%") |> pull()` of those who said they were not forced to flee.
+
+### 2 Requiring international protection
+
+> **Question in South Sudan: What is the main reason you had to flee home?**
+
+The next question in the cascade in asks about the reasons for fleeing or abandoning home. There is little attrition of individuals with refugee cards in the roster or among randomly selected adults. In South Sudan, 4% of individuals with refugee cards in the roster who had to flee or abandon their homes do not provide a reason for fleeing that would mean that they would require international protection.
+
+In Pakistan and Cameroon the wording of this question was adapted to reflect the inclusion of the recovery question on abandoning home: 
+ 
+> **What is the main reason you fled or abandon your home?**
+
+In Pakistan this applies to 2%. In both countries, they are individuals for whom the proxy said that they fled or abandoned their home for personal reasons. In Cameroon, this applies to less than 1% of individuals in the roster. 
+
+In South Sudan, those individuals are mainly from Sudan, while the share is similar for men and women. In Pakistan, women with refugee cards in the roster are more likely to have the (proxy) response "for personal reasons" than men with refugee cards. Across countries, those without a reason for fleeing that would require international protection are younger on average (although the group of those in the "non-valid reason" is small - we can check for significance).
+
+```{r fig.cap = "Reasons for fleeing/abandoning home", fig.asp=.4}
+roster_id |>
+  filter(ID_09Ref == "1", ID_01b_combine == "1") |>
+  filter(!is.na(ID_02_valid)) |>
+  labelled::to_factor() |>
+  mutate(ID_02 = case_when(ID_02 == "Personnal reasons" ~ "Personal reasons",
+                           ID_02 == "Security reasons, armed conflicts and generalized violence" ~ "Security/conflict/violence",
+                           TRUE ~ ID_02)) |>
+  ggplot(aes(y = ID_02, fill = ID_02_valid)) +
+  geom_bar() +
+  theme_unhcr(grid = "x",axis_title = FALSE, axis = "y")  +
+  scale_fill_unhcr_d() +
+  scale_x_continuous(
+    expand = expansion(c(0, 0.1))) +
+  facet_wrap(~ Country, nrow = 1, scales = "free_x") +
+  geom_vline(xintercept = 0)
+```
+
+```{r tab.cap = "Requiring international protection, by nationality (only n>50 included)"}
+# Check COB, age, sex
+reason_cob <- roster_id |>
+  filter(ID_09Ref == "1", ID_01b_combine == "1", !is.na(citizenship)) |>
+  group_by(Country, ID_02_valid, citizenship) |> 
+  summarise(n = n()) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_02_valid)|> 
+  mutate(across(where(is.numeric), ~ replace_na(., 0)))  |> mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-`row_total`, -`row_total %`)
+
+reason_cob %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  filter(`Required international protection`+`Did not require international protection`>50) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap = "Requiring international protection, by sex, roster", , fig.asp=.3}
+reason_sex <- roster_id |>
+  filter(ID_09Ref == "1", ID_01b_combine == "1", !is.na(sex)) |>
+  group_by(Country, ID_02_valid, sex) |> 
+  summarise(n = n()) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  group_by(Country, sex) |>
+  mutate(prop = n/sum(n))
+  
+reason_sex  |>
+  filter(ID_02_valid == "Required international protection") |>
+  mutate(Country = factor(Country, levels = c("South Sudan", "Pakistan", "Cameroon"))) |>
+  ggplot(aes(x = fct_rev(Country), y = prop*100, 
+             fill = sex)) +
+  geom_col(width = 0.7, position = "dodge") +
+  scale_fill_unhcr_d() +
+  scale_y_continuous(limits = c(0, 100),
+                     breaks = seq(0, 100, by = 20),
+                     labels = function(x) paste0(x, "%"), 
+                     expand = expansion(c(0, 0.1))) +
+  labs(x = NULL,
+       y = "% of individuals with a refugee card who were forced to flee/abandon home") +
+  theme_unhcr(axis = "y") +
+  theme(axis.text.x = element_text(hjust = 0.5),
+        panel.grid.major.x = element_line(size = 0.5, linetype = 'solid', color = 'grey80'),
+        panel.grid.major.y = element_blank()) +
+  coord_flip()
+```
+
+```{r tab.cap = "Requiring international protection, mean age"}
+reason_age <- roster_id |>
+  filter(ID_09Ref == "1", ID_01b_combine == "1", !is.na(ID_02_valid)) |>
+  group_by(Country, ID_02_valid) |> 
+  summarise(n = mean(ageYears, na.rm=T)) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_02_valid)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0))) 
+  
+reason_age |>  
+  mutate(across(is.numeric, ~round(., 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+The FDS in Cameroon includes an additional recovery question:
+
+ > "You said you were never forced to flee or had to abandon your home, however you now live in a foreign country. What is the reason that made you leave Cameroon most recently? OR What is the most recent reason that made you leave Cameroon?". 
+ 
+If the response to this question is not a reason that would require international protection, then this supersedes the response to whether an individual fled or abandoned their home. This recovery question is effective, capturing around three-quarters of individuals about whom the proxy respondent said that they never had to flee or abandon their homes, but who have a refugee card and say they left their home Country because of security, conflict, violence fear of persecution or human rights violations.
+
+```{r}
+# Calculate table for recovery question 2
+ID_02b_recovery <- roster_id |>
+  filter(ageYears >= 15, ID_09Ref == "1", cob != "1", Country == "Cameroon",  ID_01b == "2" & ID_01b_2 == "2") |>
+  group_by(Country, ID_01b, ID_01b_2, ID_02b) |>
+  summarise(Count = n()) |> 
+  ungroup() |>
+  group_by(Country, ID_01b, ID_01b_2) |>
+  mutate(`%` = percent(Count/sum(Count), accuracy = 1)) |>
+  ungroup() |>
+  to_factor()
+```
+
+```{r tab.cap="Recovery question 2: Reason for moving abroad, proxy responses for individuals with a refugee document born abroad, Cameroon"}
+ID_02b_piv <- roster_id |>
+  filter(ageYears >= 15, ID_09Ref == "1", cob != "1", Country == "Cameroon", ID_00 %in% c("2","3")) |>  
+  select(ID_01b, ID_01b_2, ID_02b) |>
+  to_factor() |>
+  mutate(ID_01b_2 = case_when(ID_01b == "Had to flee" ~ NA_character_,
+                              TRUE ~ ID_01b_2),
+         ID_02b = case_when(ID_01b == "Had to flee" | ID_01b == "Had to abandon home" ~ NA_character_,
+                              TRUE ~ ID_02b)) |>
+  pivot_longer(cols = c(ID_01b, ID_01b_2, ID_02b), names_to = "var", values_to = "val") |>
+   filter(!is.na(val)) |>
+  mutate(val = case_when(val %in% c("Had to flee", "Had to abandon home", "Security, conflict, violence", "Fear of persecution", "Human rights violation") ~ "Yes", TRUE ~ "No"),
+         val = fct_relevel(val, "Yes", "No"))
+
+ggplot(ID_02b_piv, aes(x = var, fill = val)) +
+  geom_bar(width = .4) +
+  scale_fill_unhcr_d(palette = "pal_unhcr", nmax = 2, order = c(2, 1)) +
+  scale_y_continuous(
+    expand = expansion(c(0, 0.2)),
+  ) +
+  scale_x_discrete(labels = c("ID_01b" = "Forced to flee", "ID_01b_2" = "Forced to\nabandon home", "ID_02b" = "Moved abroad and\nrequired protection")) +
+  theme_unhcr(grid = "", axis = "x", axis_title = FALSE) +
+  theme(panel.grid.major.y = element_line(size = 0.5, linetype = 'solid', color = 'grey80'),
+)
+```
+
+**Random adult**
+
+```{r tab.cap = "Require international protection, by nationality (only *n>*50 included), random adut"}
+# Check COB, age, sex
+reason_cobRA <- ra_id |>
+  filter(ID_09RARef == "1", ID_01b_combineRA == "1", !is.na(citizenship)) |>
+  group_by(Country, ID_02_validRA, citizenship) |> 
+  summarise(n = n()) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_02_validRA)|> 
+  mutate(across(where(is.numeric), ~ replace_na(., 0)))  |> mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-`row_total`, -`row_total %`)
+
+reason_cobRA %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  filter(`Required international protection`+`Did not require international protection`>50) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap = "Required international protection, by sex, random adult"}
+reason_sexRA <- ra_id |>
+  filter(ID_09RARef == "1", ID_01b_combineRA == "1", !is.na(sex)) |>
+  group_by(Country, ID_02_validRA, sex) |> 
+  summarise(n = n()) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_02_validRA)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0)))  |> mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-`row_total`, -`row_total %`)
+  
+reason_sexRA |>  
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap = "Required international protection, mean age"}
+reason_age <- ra_id |>
+  filter(ID_09RARef == "1", ID_01b_combineRA == "1", !is.na(ID_02_validRA)) |>
+  group_by(Country, ID_02_validRA) |> 
+  summarise(n = mean(ageYears, na.rm=T)) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_02_validRA)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0))) 
+  
+reason_age |>  
+  mutate(across(is.numeric, ~round(., 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+
+```{r}
+# Calculate table for recovery question 2
+ID_02b_recoveryRA <- ra_id |>
+  filter(ageYears >= 15, ID_09Ref == "1", cob != "1", Country == "Cameroon",  ID_01b == "2" & ID_01b_2RA == "2") |>
+  group_by(Country, ID_01bRA, ID_01b_2RA, ID_02bRA) |>
+  summarise(Count = n()) |> 
+  ungroup() |>
+  group_by(Country, ID_01bRA, ID_01b_2RA) |>
+  mutate(`%` = percent(Count/sum(Count), accuracy = 1)) |>
+  ungroup() |>
+  to_factor()
+```
+
+
+
+### 3 Crossing a border
+
+> After you were forced to flee home, did you have to cross an international border? 
+
+In South Sudan, `r percent(1-cascade_prop |> filter(Country == "South Sudan", dat == "Roster", name == "Crossed border") |> select(value) |> pull())` of individuals with a valid refugee card crossed a border. The share of individuals in the cascade nly smalls by a fall amount.
+
+For Pakistan and Cameroon, the question was simplified to:
+
+> Did you move to another country?
+
+In Pakistan `r percent(cascade_prop |> filter(Country == "Pakistan", dat == "Roster", name == "Crossed border") |> select(value) |> pull())` of individuals who have a refugee card and a reason for fleeing that would require international protection say that they never had to move abroad. This is a drop pf `r (cascade_prop |> filter(Country == "Pakistan", dat == "Roster", name == "Required international protection") |> select(value) |> pull() - cascade_prop |> filter(Country == "Pakistan", dat == "Roster", name == "Crossed border") |> select(value) |> pull())*100` percentage points, around half those individuals remaining the cascade. This could imply that the wording on crossing a border was misunderstood in Pakistan
+
+In Cameroon, `r percent(cascade_prop |> filter(Country == "Cameroon", dat == "Roster", name == "Crossed border") |> select(value) |> pull())` of individuals who have a refugee card and a reason for fleeing that would require international protection say that they never had to move abroad. This is a third less than those who said they fled or abandoned their homes. This is this case for different nationalities. Nigerians are slightly under-represented in the group for who the (proxy) respondent says that they moved abroad after fleeing. This could imply that the wording on crossing a border was misunderstood in Cameroon.
+
+In Cameroon and South Sudan, the share is similar for men and women. In Pakistan, women are less likely to have crossed a border although they were born abroad, fled, and have a refugee card, according to the proxy respondent.
+
+**Also admin1 for different countries Add in-camp/out-of-camp var**
+
+```{r tab.cap="Nationality of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+# Check COB
+roster_ref_noBorder_citizenship <- roster_id |>
+  filter(ID_09Ref == "1",  ID_01b_combine == "1", ID_02_valid == "1", !is.na(citizenship)) |>
+  group_by(Country, ID_03_simp, citizenship) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = ID_03_simp)  |>
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-row_total, -`row_total %`)
+
+roster_ref_noBorder_citizenship %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  filter(`Crossed border`+`Did not cross border`>50) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Sex of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+# Check sex
+roster_ref_noBorder_sex <- roster_id |>
+  filter(ID_09Ref == "1",  ID_01b_combine == "1", ID_02_valid == "1", !is.na(sex)) |>
+  group_by(Country, ID_03_simp, sex) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = ID_03_simp)  |>
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-row_total, -`row_total %`)
+
+roster_ref_noBorder_sex %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Mean age of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+roster_ref_noBorder_age <- roster_id |>
+  filter(ID_09Ref == "1",  ID_01b_combine == "1", ID_02_valid == "1", !is.na(sex)) |>
+  group_by(Country, ID_03_simp) |> 
+  summarise(n = mean(ageYears, na.rm=T)) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_03_simp)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0))) 
+  
+roster_ref_noBorder_age |>  
+  mutate(across(is.numeric, ~round(., 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+**Random adult**
+
+```{r tab.cap="Nationality of individuals with a valid refugee card and were not forced to flee/abandon their homes, random adult"}
+# Check COB
+roster_ref_noBorder_citizenshipRA <- ra_id |>
+  filter(ID_09RARef == "1",  ID_01b_combineRA == "1", ID_02_validRA == "1", !is.na(citizenship)) |>
+  group_by(Country, ID_03_simpRA, citizenship) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = ID_03_simpRA)  |>
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-row_total, -`row_total %`)
+
+roster_ref_noBorder_citizenshipRA %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  filter(`Crossed border`+`Did not cross border`>50) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Sex of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+# Check sex
+roster_ref_noBorder_sexRA <- ra_id |>
+  filter(ID_09RARef == "1",  ID_01b_combineRA == "1", ID_02_validRA == "1", !is.na(sex)) |>
+  group_by(Country, ID_03_simpRA, sex) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = ID_03_simpRA)  |>
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-row_total, -`row_total %`)
+
+roster_ref_noBorder_sexRA %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Mean age of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+roster_ref_noBorder_ageRA <- ra_id |>
+  filter(ID_09RARef == "1",  ID_01b_combineRA == "1", ID_02_validRA == "1", !is.na(sex)) |>
+  group_by(Country, ID_03_simpRA) |> 
+  summarise(n = mean(ageYears, na.rm=T)) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_03_simpRA)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0))) 
+  
+roster_ref_noBorder_ageRA |>  
+  mutate(across(is.numeric, ~round(., 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+More recent arrivals in South Sudan are less likely to say that they crossed a border , particularly since around 2011. *This does not really make sense to me... - needs more examination*
+
+```{r fig.cap = "Year of arrival and response to crossing a border", fig.asp=.4}
+ggplot(roster_id |> filter(as.numeric(arrivalYear) > 1950), aes(x = as.numeric(arrivalYear), y = str_wrap(to_factor(ID_03_simp), 20), fill = ID_03_simp)) +
+  geom_density_ridges(bandwidth = 0.9) +
+  facet_wrap(~ Country, scales = "free_x") +
+  labs(x = "Arrival Year",
+       y = "") +
+  theme_unhcr() +
+  theme_unhcr(grid = "y", axis = "x") +
+  theme(legend.position = "none") + 
+  scale_fill_unhcr_d() +
+  scale_y_discrete(
+    expand = expansion(c(0, 0.1)))
+```
+
+### 4 Applying for protection
+```{r ID_05_tbl}
+ID_05_prop <- roster_id |>
+  filter(ID_09Ref == "1", ID_01b_combine == "1", ID_02_valid == "1", ID_03_simp == "1", !is.na(ID_05)) |>
+  group_by(Country, ID_05) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  mutate(ID_05 = case_when(ID_05 == "volunteered response: No, because I benefit from a prima facie recognition" ~ "No, prima\nfacie recognition",
+                           TRUE ~ ID_05),
+         ID_05 = fct_relevel(ID_05, "Refuse to answer", "No, prima\nfacie recognition",  "No", "Yes")) |>
+  group_by(Country) |> 
+  mutate(prop = n/sum(n)) |> 
+  ungroup() |>
+  mutate(prop = case_when(is.na(prop) ~ 0, TRUE ~ prop)) 
+```
+
+> While in {host country}, did you apply for international protection?
+
+Among individuals with refugee cards who crossed a border, the share that reports applying for international protection varies by country. This may reflect different understandings of registration, depending on the country of origin and legal status... *LR: could you add context, please?* In South Sudan, only for `r percent(cascade_prop |> filter(Country == "South Sudan", dat == "Roster", name == "Applied for international protection/prima facie recognition") |> select(value) |> pull())` of individuals with a valid refugee card state the response is that they applied for protection or received prima facie recognition. This is a drop of `r round((cascade_prop |> filter(Country == "South Sudan", dat == "Roster", name == "Crossed border") |> select(value) |> pull() - cascade_prop |> filter(Country == "South Sudan", dat == "Roster", name == "Applied for international protection/prima facie recognition") |> select(value) |> pull())*100) ` percentage points of the remaining sample.
+
+The wording of the question was altered for the Cameroon and Pakistan FDS, providing examples of registration locations. This may have helped respondents understand the question. 
+
+In Cameroon, this applies to almost all households (99%). Across all three countries, the share of voluntary responses *"No, prima facie recognition"* and *"Refuse to answer"* is negligible.  There is no large difference in the age or sex of those who applied and did not apply for international protection.
+
+
+```{r fig.cap = "Request for international protection, individuals with refugee cards who fled for a reason that requires international protection and crossed a border", fig.asp=.4}
+ID_05_prop |>
+  ggplot(aes(y = ID_05, x = prop, fill = "1")) +
+  geom_col(width = 0.8) +
+  theme_unhcr(grid = "x",axis_title = FALSE, axis = "y", legend = FALSE)  +
+  scale_fill_unhcr_d() +
+    geom_text(aes(label = percent(prop, 1), y = ID_05),
+              hjust = -0.1,
+              stat = "identity") +
+    scale_x_continuous(expand = expansion(c(0, 0.1)),
+                       labels = percent,
+                       limits = c(0, 1)) +
+  facet_wrap(~ Country, nrow = 1, scales = "free_x")
+```
+
+```{r tab.cap="Country of birth and nationality of individuals with a valid refugee card who did not apply for internation protection"}
+# Check COB
+roster_ref_noProtection <- roster_id |>
+  filter(ID_09Ref == "1", ID_01b_combine == "1", ID_02_valid == "1", ID_03_simp == "1", !is.na(ID_05)) |>
+  group_by(Country, ID_05_simp, citizenship) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = ID_05_simp)  |>
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-row_total, -`row_total %`)
+
+roster_ref_noProtection %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  filter(`Applied for international protection/prima facie recognition`+`Did not apply for international protection/prima facie recognition`>50) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Sex of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+# Check sex
+roster_ref_noProtection_sex <- roster_id |>
+  filter(ID_09Ref == "1", ID_01b_combine == "1", ID_02_valid == "1", ID_03_simp == "1", !is.na(ID_05)) |>
+  group_by(Country, ID_05_simp, sex) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = ID_05_simp)  |>
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-row_total, -`row_total %`)
+
+roster_ref_noProtection_sex %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Mean age of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+roster_ref_noProtection_age <- roster_id |>
+  filter(ID_09Ref == "1",  ID_01b_combine == "1", ID_02_valid == "1", !is.na(sex)) |>
+  group_by(Country, ID_05_simp) |> 
+  summarise(n = mean(ageYears, na.rm=T)) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_05_simp)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0))) 
+  
+roster_ref_noProtection_age |>  
+  mutate(across(is.numeric, ~round(., 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+**Random adult**
+```{r ID_05RA_tbl}
+ID_05RA_prop <- ra_id |>
+  filter(ID_09RARef == "1", ID_01b_combineRA == "1", ID_02_validRA == "1", ID_03_simpRA == "1", !is.na(ID_05RA)) |>
+  group_by(Country, ID_05RA) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  mutate(ID_05RA = case_when(ID_05RA == "volunteered response: No, because I benefit from a prima facie recognition" ~ "No, prima\nfacie recognition",
+                           TRUE ~ ID_05RA),
+         ID_05RA = fct_relevel(ID_05RA, "Refuse to answer", "No, prima\nfacie recognition",  "No", "Yes")) |>
+  group_by(Country) |> 
+  mutate(prop = n/sum(n)) |> 
+  ungroup() |>
+  mutate(prop = case_when(is.na(prop) ~ 0, TRUE ~ prop)) 
+```
+
+```{r fig.cap = "Request for international protection, individuals with refugee cards who fled for a reason that requires international protection and crossed a border", fig.asp=.4}
+ID_05RA_prop |>
+  ggplot(aes(y = ID_05RA, x = prop, fill = "1")) +
+  geom_col(width = 0.8) +
+  theme_unhcr(grid = "x",axis_title = FALSE, axis = "y", legend = FALSE)  +
+  scale_fill_unhcr_d() +
+    geom_text(aes(label = percent(prop, 1), y = ID_05RA),
+              hjust = -0.1,
+              stat = "identity") +
+    scale_x_continuous(expand = expansion(c(0, 0.1)),
+                       labels = percent,
+                       limits = c(0, 1)) +
+  facet_wrap(~ Country, nrow = 1, scales = "free_x")
+```
+
+```{r tab.cap="Country of birth and nationality of individuals with a valid refugee card who did not apply for internation protection"}
+# Check COB
+roster_ref_noProtectionRA <- ra_id |>
+  filter(ID_09RARef == "1", ID_01b_combineRA == "1", ID_02_validRA == "1", ID_03_simpRA == "1", !is.na(ID_05RA)) |>
+  group_by(Country, ID_05_simpRA, citizenship) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = ID_05_simpRA)  |>
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-row_total, -`row_total %`)
+
+roster_ref_noProtectionRA %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  filter(`Applied for international protection/prima facie recognition`+`Did not apply for international protection/prima facie recognition`>50) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Sex of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+# Check sex
+roster_ref_noProtection_sexRA <- ra_id |>
+  filter(ID_09RARef == "1", ID_01b_combineRA == "1", ID_02_validRA == "1", ID_03_simpRA == "1", !is.na(ID_05RA)) |>
+  group_by(Country, ID_05_simpRA, sex) |> 
+  summarise(n = n()) |>
+  ungroup() |>
+  labelled::to_factor() |>
+  pivot_wider(values_from = n, names_from = ID_05_simpRA)  |>
+  mutate(row_total = rowSums(across(is.numeric), na.rm = TRUE)) |>
+  mutate(across(is.numeric, ~ . / row_total, .names = "{col} %")) |>
+  select(-row_total, -`row_total %`)
+
+roster_ref_noProtection_sexRA %>%
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Mean age of individuals with a valid refugee card and were not forced to flee/abandon their homes"}
+roster_ref_noProtection_ageRA <- ra_id |>
+  filter(ID_09RARef == "1",  ID_01b_combineRA == "1", ID_02_validRA == "1", !is.na(sex)) |>
+  group_by(Country, ID_05_simpRA) |> 
+  summarise(n = mean(ageYears, na.rm=T)) |>
+  labelled::to_factor() |>
+  ungroup() |>
+  pivot_wider(values_from = n, names_from = ID_05_simpRA)  |>
+  mutate(across(where(is.numeric), ~ replace_na(., 0))) 
+  
+roster_ref_noProtection_ageRA |>  
+  mutate(across(is.numeric, ~round(., 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+
+## Comparing random adult and proxy responses
+
+To assess the validity of the identification answers further, we exploit the fact that the survey contains a large number of cases where both a proxy and the randomly selected adult responded to the questionniare. This is the case whenever the respondent to the head of household questionnaire was not selected for random adult/random woman questionnaire. We compare the results of both. e This allows us to check the reliability of a proxy respondent, but reduces the sample. *Perhaps interesting to check for consistency of the responses when same persons responds to same questions twice?*
+ 
+In South Sudan and Cameroon, the responses by proxies and the random adult are generally consistent. This is true regarding the type of refugee document and the place of birth, indicating reliable reporting from both respondent types. In Pakistan, proxies slightly underreport the possession of refugee documents compared to random adults. In Pakistan there is also a difference in the country of birth. Among those individuals for which the proxy reports that they were born abroad, 13% say that they were born in Pakistan. 
+
+```{r}
+# Filter complete cases where ID_00 and ID_00RA are not missing
+ra_id <- ra_id |>
+  filter(!is.na(ID_00) & !is.na(ID_00RA))
+
+compare_tab <- ra_id |>
+  group_by(Country) |>
+  filter(mPosition != "1") |>
+  mutate(
+    ID_09_comp = case_when(ID_09RA == ID_09 ~ 1, TRUE ~ 0),
+    ID_01b_combine_comp = case_when(ID_01b_combineRA == ID_01b_combine ~ 1, TRUE ~ 0),
+    ID_02_comp = case_when(ID_02RA == ID_02 ~ 1, TRUE ~ 0),
+    ID_03_simp_comp = case_when(ID_03_simpRA == ID_03_simp ~ 1, TRUE ~ 0),
+    ID_05_simp_comp = case_when(ID_05_simpRA == ID_05_simp ~ 1, TRUE ~ 0),
+    ID_06b_comp = case_when(ID_06bRA == ID_06b ~ 1, TRUE ~ 0),
+  ) |>
+  summarise(
+    ID_09_comp = mean(ID_09_comp),
+    ID_01b_combine_comp = mean(ID_01b_combine_comp),
+    ID_02_comp = mean(ID_02_comp),
+    ID_03_simp_comp = mean(ID_03_simp_comp),
+    ID_05_simp_comp = mean(ID_05_simp_comp),
+    ID_06b_comp = mean(ID_06b_comp)
+  ) |>
+  ungroup()
+
+# Function to produce crosstabs 
+crosstab_tile <- function(data = ra_id, country_filter, var_ra, var_roster) {
+  data_filtered <- data |> 
+    #filter(Country == country_filter)  |> 
+    filter(mPosition != "1",
+           !is.na({{var_roster}}), 
+           !is.na({{var_ra}}),
+           {{var_roster}} != "",
+           {{var_ra}} != "") |>
+    labelled::to_factor() |> 
+    mutate(Country = factor(Country, levels = c("South Sudan", "Pakistan", "Cameroon"))) |>  
+    group_by(Country, {{var_ra}}, {{var_roster}}) |> 
+    summarise(n = n(), .groups = 'drop') |>
+    ungroup()
+  
+  ggplot(data_filtered, aes({{var_ra}}, {{var_roster}})) + 
+    geom_tile(aes(fill = n), color = "white", linetype = 1, lwd = .5) +
+    geom_text(aes(label = n), color = if_else(data_filtered$n > 200, "white", "black"),
+              size = 8 / ggplot2::.pt) +
+    scale_x_discrete(labels = scales::label_wrap(25)) +
+    scale_y_discrete(labels = scales::label_wrap(25)) +
+    scale_fill_stepsn(colors = unhcr_pal(n = 5, "pal_blue")) +
+    coord_fixed() +
+    theme_unhcr(grid = FALSE, axis = FALSE, axis_title = TRUE, legend = FALSE, font_size = 10) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+    labs(x = "Random adult", y= "Proxy")
+}
+```
+
+#### Identification document
+
+```{r }
+crosstab_tile(data = ra_id |> filter(Country == "South Sudan"), var_ra=ID_09RA, var_roster=ID_09) + facet_wrap(~ Country)
+crosstab_tile(data = ra_id |> filter(Country == "Pakistan"), var_ra=ID_09RA, var_roster=ID_09) + facet_wrap(~ Country) 
+```
+```{r  fig.cap="ID document for random adult and proxy responses"}
+crosstab_tile(data = ra_id |> filter(Country == "Cameroon"), var_ra=ID_09RA, var_roster=ID_09) + facet_wrap(~ Country) 
+```
+
+
+```{r  fig.cap="Place of birth for random adult and proxy responses"}
+crosstab_tile(var_ra=ID_00RA, var_roster=ID_00) + facet_wrap(~Country)
+```
+
+Responses to whether individuals had to flee or abandon their homes reveal differences in in the responses in South Sudan. 9% of randomly selected adults reported that they did not have to flee, although the proxy reported that they had. This may indicate misunderstandings or different interpretations of the question, as noted above. The introduction of the recovery question in Pakistan and South Sudan ("abandoning home") captured more individuals who initially did not identify as having fled, although the responses are not consistent by proxy and self-response.
+
+```{r  fig.cap="Fled/abandoned home for random adult and proxy responses", fig.asp=.5}
+crosstab_tile(var_ra=ID_01bRA, var_roster=ID_01b) + facet_wrap(~Country)
+```
+
+```{r  fig.cap="Fled/abandoned home for random adult and proxy responses", fig.asp=.5}
+crosstab_tile(ra_id |> filter(Country != "South Sudan"), var_ra=ID_01b_2RA, var_roster=ID_01b_2) + facet_wrap(~Country)
+```
+
+The reasons for forced displacement are highly consistent for both proxy and self-respondents. In both groups and across all three countries, Security issues, conflict or violence were overwhelmingly named as the reason for fleeing or abandoning home. 
+
+
+```{r fig.cap="Reason for fleeing random adult and proxy responses", fig.asp=.5}
+crosstab_tile(data = ra_id, var_ra=ID_02RA, var_roster=ID_02) + facet_wrap(~Country)
+```
+On the question about crossing an international border proxy and self-respondents around 5% of responses are inconsistent. In South Sudan, the share is lower at 2%. The proxy and self-responses are similarly consistent regarding applying for international protection.
+
+```{r fig.cap="Crossed a border random adult and proxy responses", fig.asp=.5}
+crosstab_tile(var_ra=ID_03RA, var_roster=ID_03) + facet_wrap(~Country)
+```
+
+```{r fig.cap="Applied for protection random adult and proxy responses", fig.asp=.5}
+crosstab_tile(var_ra=ID_05RA, var_roster=ID_05) + facet_wrap(~Country)
+```
+
+```{r fig.cap="Outcome protection application random adult and proxy responses", fig.asp=.5}
+crosstab_tile(var_ra=ID_06bRA, var_roster=ID_06b) + facet_wrap(~Country)
+```
+
+## Conclusion
+
+We evaluated the reliability and consistency of responses to criteria-based identification questions among refugee card holders across three countries in the FDS pilot phase, using both proxy and random adult respondents. This contributes to further developing identification questions on refugee status to be used and improve survey methodologies.
+
+The analysis shows that many refugee card holders in the three FDS pilot countries did not respond to the criteria-based questions as expected. In South Sudan, a significant portion of respondents indicated they did not have to flee, which contrasts with their legal status as refugees. This suggests misunderstandings or different interpretations of the question. In Cameroon, a substantial proportion of proxies reported that individuals did not cross a border, despite holding refugee documents, indicating potential misunderstandings of the question. The case of Pakistan showed the challenges correctly identifying children of refugees. The current set of questions focuses on adults, and there is a need to develop criteria-based questions that can accurately identify children of refugees. This includes considering the legal status of their parents and their own displacement experiences.
+
+We collect some evidence on the groups that not responding to the identification questions as expected. *Individuals who do not respond as their legal status would suggest tend to be younger and, in some cases, female. In South Sudan, those who did not provide valid reasons for fleeing are often younger. In Pakistan, women are more likely to have proxy responses indicating personal reasons for fleeing, which do not qualify for international protection. These discrepancies highlight the need for tailored questions that consider demographic factors and potential misunderstandings.*
+
+The findings show the necessity of adapting criteria-based questions to the specific context of each country. This includes considering local understandings of terms like "flee" and "abandon home". 
+
+Further research is needed to design and test questions that can effectively capture the status of children in refugee households.
+
+Open questions: 
+- Remove PAK at some point because such small sample?
+- Add analysis of household heads to see if consistent?
+- You include Zambia sometimes - I would leave it out and add later, otherwise confusing or we have to wait for a long time before moving forward
+
+# Annex
+
+```{r  table.cap = "Country of birth of individuals with a refugee document who did not have to flee or abandon their home, random adult/woman"}
+ra_ref_neverFlee |>
+  mutate(across(ends_with("%"), ~percent(., accuracy = 1))) |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head") 
+```
+
+```{r tab.cap="Recovery question fleeing/abandoning home, random adult with a refugee document born abroad"}
+# Print table for recovery question 1
+ID_01bRA_recovery |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```
+
+```{r tab.cap="Recovery question 2 reasons for moving, proxy responses for individuals with a refugee document born abroad"}
+# Print table for recovery question 2
+ID_02b_recoveryRA |>
+  flextable() |> fontsize(size = 9, part = "all") |> bold(part = "head")
+```

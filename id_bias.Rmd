@@ -1,0 +1,945 @@
+---
+title: "Bias from criteria-based refugee identification"
+date: "`r format(Sys.Date(),  '%d %B %Y')`"
+output:
+  unhcrdown::docx_simple
+    #back_html: true
+paged-footnotes: true
+links-to-footnotes: true
+
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, fig.cap = TRUE, fig.width = 6.27)
+```
+
+```{r packages}
+pacman::p_load(labelled, tibble, tidyverse, forcats, fusen, srvyr, kableExtra, rlang, stringr, purrr, unhcrthemes, writexl, knitr, scales, extrafont, scales, knitr, survey, broom, prettyunits, gtools, flextable, officedown, officer, bookdown, unhcrthemes) 
+
+loadfonts(device = "win")
+```
+
+```{r data_import}
+roster_id <- read_rds("data/roster_id.rds") |>
+  filter(ageYears >= 15) |>
+  filter(ID_09Ref == "1")
+ra_id <- read_rds("data/ra_id.rds")  |>
+  filter(ageYears >= 15)  |>
+  filter(ID_09Ref == "1")
+```
+
+```{r}
+# Refugee based on criteria
+roster_id <- roster_id |>
+  mutate(criteria_ref = case_when(ID_06b == 1 ~ "Refugee based on criteria",
+                                  TRUE ~ "Non-refugee based on criteria"),
+         criteria_ref_num = case_when(criteria_ref == "Refugee based on criteria" ~ 1, TRUE ~ 0))
+  
+ra_id <- ra_id |>
+  mutate(criteria_ref = case_when(ID_06b == 1 ~ "Refugee based on criteria",
+                                  TRUE ~ "Non-refugee based on criteria"),
+         criteria_ref_num = case_when(criteria_ref == "Refugee based on criteria" ~ 1, TRUE ~ 0))
+```
+
+# Introduction
+
+An accurate and standardized approach to identifying refugees, asylum-seekers, and internally displaced persons (IDPs) is critical for their inclusion in national statistical systems. The Expert Group on Refugee, Internally Displaced and Stateless Persons Statistics (EGRISS) has addressed this challenge through the International Recommendations on Refugee and IDP Statistics (IRRS/IRIS), endorsed by the UN Statistics Division in 2018-2020. Rather than relying on direct self-identification, which can lead to misreporting, the EGRISS framework employs indirect criteria-based questions covering citizenship, migration reasons, and border crossings to identify displaced populations.
+
+UNHCR's Forced Displacement Survey (FDS) implemented these guidelines in its three pilot surveys in South Sudan, Pakistan, and Cameroon, conducted across 2023 and 2024. The findings from these surveys provide an opportunity to evaluate the criteria-based identification questions across diverse refugee contexts. In a previous paper, we show that despite holding legal refugee status, many card holders fail to respond to criteria-based questions as expected.^[link] The analysis shows a range of challenges correctly identifying refugees with the criteria-based questions, for example due misunderstandings of key terminology, complexities of displacement biographies and family reunification, in multi-generational displacement contexts, and country-specific policy environments.
+
+The misidentification warrants further examination because it appears to be non-random. Our previous analysis shows that certain groups, for example children of refugees, households which were separated and subsequently reunited, and those in fluid border regions are systematically excluded. Relying on identification questions as implemented in the FDS pilot countries would therefore misrepresent the population share of important population groups. Table X presents a summary of key socio-demographic statistics among refugees with a valid document for the three countries, disaggregating by those who complete and those who do not complete the identification cascade.
+
+```{r}
+row_order <- c("Year of arrival (median)", "Age (median)", "Female", "Separated households", "Citizenship (roster_id countries)", "Household size (mean)", "n")
+
+# Function to summarize data for one country
+summarize_country <- function(df, country_name) {
+  filtered_data <- df %>% filter(Country == country_name)
+
+  summary_df <- filtered_data %>%
+    group_by(criteria_ref) %>%
+    summarise(
+      `Year of arrival (median)` = median(arrivalYear, na.rm = TRUE),
+      `Age (median)` = median(ageYears, na.rm = TRUE),
+      `Separated households` = paste0(round(mean(`Separated households`, na.rm = TRUE) * 100, 1), "%"),
+      `Female` = paste0(round(mean(Female, na.rm = TRUE) * 100, 1), "%"),
+      `Household size (mean)` = round(mean(hhsize, na.rm = TRUE), 1),
+      n = sum(!is.na(arrivalYear)),
+      .groups = "drop"
+    ) %>%
+    mutate(across(everything(), ~as.character(.))) %>%
+    pivot_longer(
+      cols = c(`Year of arrival (median)`, `Age (median)`, `Separated households`, `Female`, `Household size (mean)`,  n),
+      names_to = "Variable",
+      values_to = "value"
+    )
+
+  top_citizenships <- filtered_data %>%
+    filter(!is.na(citizenship)) %>%
+    count(citizenship) %>%
+    mutate(pct = round(n / sum(n) * 100, 1)) %>%
+    arrange(desc(n)) %>%
+    filter(pct > 5) %>%
+    slice_head(n = 3) %>%
+    mutate(label = paste0(citizenship, " (", pct, "%)")) %>%
+    pull(label) %>%
+    paste(collapse = ", ")
+
+  citizenship_row <- filtered_data %>%
+    distinct(criteria_ref) %>%
+    mutate(
+      Variable = "Citizenship (roster_id countries)",
+      value = top_citizenships
+    )
+
+  bind_rows(summary_df, citizenship_row) %>%
+    mutate(Variable = factor(Variable, levels = row_order)) %>%
+    arrange(Variable) %>%
+    pivot_wider(names_from = criteria_ref, values_from = value) %>%
+    flextable() %>%
+    autofit()
+}
+
+```
+
+*[COMBINE TABLES WHEN LAYOUTING]*
+```{r tab-ssd, tab.cap="Summary statistics, South Sudan"}
+roster_id %>%
+  summarize_country(., country_name = "South Sudan")  |>
+  fontsize(size = 9, part = "all") |> 
+  bold(part = "head")
+```
+
+```{r tab-cmr, tab.cap="Summary statistics, Cameroon"}
+roster_id %>%
+  summarize_country(., country_name = "Cameroon")  |>
+  fontsize(size = 9, part = "all") |> 
+  bold(part = "head")
+```
+
+```{r tab-pak, tab.cap="Summary statistics, Pakistan"}
+roster_id %>%
+  summarize_country(., country_name = "Pakistan")  |>
+  fontsize(size = 9, part = "all") |> 
+  bold(part = "head")
+```
+
+In this paper, we aim to understand the nature of the bias resulting from identification using the criteria-based approach versus document-based approach for refugee identification in household surveys. Understanding and correcting these biases is essential to validate the criteria-based approach and contribute to accurate methods of statistical inclusion of displaced populations. 
+
+Limitation: effect of inclusion error is not possible to measure from FDS data. This would be error from identification of non-refugees based on criteria who in fact do not have actual status. These people are not interviewed in FDS, however we may be able to get some frequency estimates for this type of bias from people excluded from FDS after the ID module due to failure to provide a refugee document. 
+
+In this paper, we use three complementary empirical strategies to assess the misidentification bias in criteria-based refugee identification.  First, we model the likelihood of cascade non-completion using demographic and displacement history variables to determine whether exclusion is systematically correlated with specific household or individual characteristics. Second, we conduct difference-in-means tests comparing key outcome indicators between samples identified through the criteria-based cascade versus those identified via documentation, and alternatively between those completing the cascade versus those exiting at various stages. Third, we implement simulation analyses that exclude different household types to estimate the average deviation of outcome and protection indicators from their true values (based on documented status), thereby quantifying the systematic nature of identification bias and its implications for population-level estimates.
+
+In the FDS, the identification questions first appear in the roster, where the head of household responds about himself/herself and about all members of the household over 15 as a proxy. The direct respondent then receives the same set of questions. In South Sudan and Cameroon, the direct respondent was the randomly selected adult, while in Pakistan it was the randomly selected woman. If the randomly selected adult/woman is the head of household who already responded as a proxy, the questions are only asked in the roster.
+
+# Likelihood of exclusion from the identification sequence
+
+To better understand the relationship between the likelihood of completing the refugee identification questions as expected given legal documentation and a series of demographic and contextual variables including sex, household head status, country of birth, years since arrival, separation status, and refugee location (the sample stratum), we run a series of simple logistic regression model. The results are presented as odds ratios (OR) rather than log-odds coefficients for easier interpretation. These show the change in odds of meeting refugee criteria associated with each explanatory variable.^[An OR of 1 indicates no effect, values greater than 1 indicate increased odds (e.g., 2 means double the odds), and values less than 1 indicate decreased odds (e.g., 0.5 means half the odds).]
+
+**Key findings**
+
+- Separation: Positive effect on likelihood of correct identification in South Sudan, negative in Pakistan and Cameroon (surpising in SSD given descriptives that separated households more likely to state that they fled for family reasons. Interact with position in household?)
+
+- Location/stratum is consistently the strongest predictor. In Pakistan strong negative correlation with in RV and urban. In Cameroon, positive correlation with urban areas. In Cameroon, positive correlation with peri-urban and urban areas. In South SUdan very high correlation, refugees in Maban much much more likely to be identified as refugees than those in Pariang.
+
+- Individual demographics (sex, household head status) are generally not significant
+
+- Years since arrival: Born in host country has strong negative correlation in Pakistan and Cameroon, as expected. In Cameroon, longer stays in country correlated with higher likelihood of completing cascade as expected, in Pakistan and South Sudan mostly insignificant.
+
+- Relationship to household head: No siginificant relationship with likelihood of completing identification cascade.
+
+- Education: In Pakistan, higher education of HoH correlated with lower likelihood of correct identification - likely due to younger cohorts being better educated but less likely to be born abroad. In South Sudan no significant relationship, in Cameroon higher levels of education of the HoH are positively correlated with likelihood of completing identification sequence.
+
+```{r}
+countries <- unique(roster_id$Country)
+outcome_var <- "criteria_ref_num"
+covariates  <- c("sex",
+                 "sexHoH",
+                 #"hhead",
+                 "Years since arrival",
+                 "separated",
+                 "stratum",
+                 "HH_03",
+                 "eduLevelHoH")
+
+```
+
+```{r}
+roster_id <- roster_id |> 
+  filter(!cob %in% c("Don't know", "Refuse to answer", "Stateless"))
+
+roster_id <- roster_id %>%
+  mutate(years_in_hc = 2024 - as.numeric(arrivalYear)) |>
+  mutate(`Years since arrival` = case_when(
+    cob == "Host country" ~ "Born in host country", 
+    years_in_hc < 5 ~ "<5",
+    years_in_hc >= 5 & years_in_hc < 10  ~ "5-9",
+    years_in_hc >= 10 & years_in_hc < 20  ~ "10-19",
+    years_in_hc >= 20  ~ "20+",
+    TRUE ~ NA_character_
+  )) |>
+  mutate(eduLevelHoH = labelled::to_factor(eduLevelHoH))
+
+roster_id$stratum <- fct_relevel(roster_id$stratum, levels(roster_id$stratum)[3], levels(roster_id$stratum)[1])
+
+
+roster_id <- roster_id %>% 
+  mutate(
+    # Convert to factor with household head first, group uncommon categories as Other
+    HH_03 = case_when(
+      HH_03 == "The household head himself/herself" ~ "Household head",
+      HH_03 == "Biological child" ~ "Biological child",
+      HH_03 == "Wife/Husband/Partner" ~ "Wife/Husband/Partner",
+      HH_03 == "Mother/Father" ~ "Mother/Father",
+      HH_03 == "Sister/Brother" ~ "Sister/Brother",
+      HH_03 == "Grandchild" ~ "Grandchild",
+      HH_03 %in% c("Brother/Sister-in-law", 
+                   "Cousin", 
+                   "Father/Mother-in-law",
+                   "Grandfather/mother",
+                   "Niece/Nephew",
+                   "Son/Daughter-in-law",
+                   "Step child/Adopted child",
+                   "Uncle/Aunt") ~ "Other",
+      TRUE ~ "Other"
+    ),
+    HH_03 = factor(HH_03, levels = c("Household head", 
+                                     "Wife/Husband/Partner", 
+                                     "Biological child",
+                                     "Mother/Father", 
+                                     "Sister/Brother", 
+                                     "Grandchild", 
+                                     "Other"))
+  )
+
+
+# Helper: backtick unsafe names (spaces, punctuation)
+bt <- function(x) {
+  ifelse(make.names(x) != x, paste0("`", x, "`"), x)
+}
+
+# Significance stars
+add_significance <- function(p_value) {
+  ifelse(p_value < 0.001, "***",
+         ifelse(p_value < 0.01,  "**",
+                ifelse(p_value < 0.05, "*",
+                       ifelse(p_value < 0.1, ".", ""))))
+}
+
+# ---- Main per-country function ----
+model_refugee_probability <- function(data,
+                                    country_name,
+                                    outcome = "criteria_ref_num",
+                                    covars = covariates,
+                                    docvar = "D",             # set to NULL if you don't have D
+                                    seed = 123,
+                                    return_type = c("all", "summary", "odds_ratios", "model", "tidy")) {
+
+  set.seed(seed)
+  return_type <- match.arg(return_type)
+
+  # Filter to a single country
+  country_data <- data %>% filter(.data$Country == country_name)
+  if (nrow(country_data) == 0) stop(paste("Country", country_name, "not found in data"))
+
+  # If docvar provided, restrict the modeling to documented
+  if (!is.null(docvar)) {
+    country_data <- country_data %>% filter(.data[[docvar]] == 1)
+  }
+
+  # Drop missing on variables we use
+  need_vars <- c(outcome, covars)
+  country_data <- country_data %>%
+    select(any_of(c("Country", need_vars))) %>% na.omit()
+
+  # Build formula safely (support spaces)
+  fml <- as.formula(
+    paste0(bt(outcome), " ~ ", paste(bt(covars), collapse = " + "))
+  )
+
+  # ---- 1) Fit logistic regression model ----
+  model <- glm(fml, data = country_data, family = binomial())
+
+  # ---- 2) Odds ratios table (flextable) ----
+  or_tbl <- tidy(model, conf.int = TRUE) %>%
+    select(term, estimate, std.error, conf.low, conf.high, p.value) %>%
+    mutate(
+      odds_ratio = exp(estimate),
+      or_ci_low  = exp(conf.low),
+      or_ci_high = exp(conf.high),
+      odds_ratio_r = round(odds_ratio, 2),
+      or_ci_low_r  = round(or_ci_low, 2),
+      or_ci_high_r = round(or_ci_high, 2),
+      std.error_r  = round(std.error, 2),
+      p.value_r    = round(p.value, 2),
+      stars        = add_significance(p.value),
+      or_stars     = paste0(odds_ratio_r, stars)
+    ) %>%
+    select(term, or_stars, std.error_r, or_ci_low_r, or_ci_high_r, p.value_r)
+
+  or_flex <- flextable(or_tbl) %>%
+    set_caption(paste("Logistic Regression (Odds Ratios) -", country_name)) %>%
+    fontsize(size = 9, part = "all") |> 
+    set_header_labels(
+      term = "Variable",
+      or_stars = "Odds Ratio",
+      std.error_r = "Std. Error",
+      or_ci_low_r = "OR CI Lower",
+      or_ci_high_r = "OR CI Upper",
+      p.value_r = "P-value"
+    ) %>%
+    autofit() %>%
+    add_footer_lines("*** p<0.001, ** p<0.01, * p<0.05, . p<0.1")
+
+  # ---- 3) Model diagnostics ----
+  # Predicted probabilities
+  country_data$predicted_prob <- predict(model, type = "response")
+  
+  # Distribution of predicted probabilities
+  prob_plot <- ggplot(country_data, aes(x = predicted_prob, fill = factor(.data[[outcome]]))) +
+    geom_histogram(position = "identity", alpha = 0.6, bins = 30) +
+    labs(x = "Predicted P(Refugee = 1)", 
+         y = "n",
+         fill = "", 
+         title = "") +
+    theme_minimal() +
+    scale_fill_manual(values = c("0" = "lightblue", "1" = "darkblue"))
+  
+  # Model fit statistics
+  model_stats <- tibble(
+    country = country_name,
+    n_obs = nrow(country_data),
+    n_refugees = sum(country_data[[outcome]] == 1),
+    refugee_rate = mean(country_data[[outcome]] == 1),
+    aic = AIC(model),
+    bic = BIC(model),
+    deviance = deviance(model),
+    null_deviance = model$null.deviance,
+    pseudo_r2 = 1 - (deviance(model) / model$null.deviance)
+  )
+
+  # ---- 4) Assemble outputs ----
+  result <- list(
+    country = country_name,
+    model = model,
+    odds_ratios_flextable = or_flex,
+    odds_ratios_tidy = or_tbl,
+    model_stats = model_stats,
+    diagnostics = list(
+      predicted_probabilities = country_data$predicted_prob,
+      prob_distribution_plot = prob_plot
+    )
+  )
+
+}
+
+```
+
+
+
+\newpage
+
+```{r}
+res_south_sudan <- model_refugee_probability(
+  data = roster_id,
+  country_name = "South Sudan",
+  outcome = outcome_var,
+  covars = covariates,
+  docvar = NULL,
+  return_type = "odds_ratios"
+)
+
+res_south_sudan$odds_ratios_flextable
+```
+
+```{r, fig.cap= "Predicted Probabilities - South Sudan"}
+res_south_sudan$diagnostics$prob_distribution_plot
+```
+
+\newpage
+
+```{r}
+res_pak <- model_refugee_probability(
+  data = roster_id,
+  country_name = "Pakistan",
+  outcome = outcome_var,
+  covars = covariates,
+  docvar = NULL,
+  return_type = "odds_ratios"
+) 
+
+res_pak$odds_ratios_flextable
+```
+
+```{r, fig.cap= "Predicted Probabilities - Pakistan"}
+res_pak$diagnostics$prob_distribution_plot
+
+```
+
+\newpage
+
+```{r}
+res_cmr <- model_refugee_probability(
+  data = roster_id,
+  country_name = "Cameroon",
+  outcome = outcome_var,
+  covars = covariates,
+  docvar = NULL,
+  return_type = "odds_ratios"
+)
+
+res_cmr$odds_ratios_flextable
+```
+
+```{r, fig.cap= "Predicted Probabilities - Cameroon"}
+res_cmr$diagnostics$prob_distribution_plot
+
+```
+
+
+[age and arrival year likely highly correlated so just chose one]
+
+
+
+
+
+# Comparison of outcome indicators between criteria-based and document-based identification
+
+```{r}
+# Function to calculate mean values
+summary_ci <- function(data, var) {
+  summary_criteria <- data %>%
+    group_by(Country, stratum, criteria_ref) %>%
+    summarise(
+      mean = mean(.data[[var]], na.rm = TRUE),
+      se = sd(.data[[var]], na.rm = TRUE) / sqrt(sum(!is.na(.data[[var]]))),
+      n = sum(!is.na(.data[[var]])),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      lower = mean - 1.96 * se,
+      upper = mean + 1.96 * se,
+      variable = var
+    )
+  
+  summary_ref <- data %>%
+    group_by(Country, stratum) %>%
+    summarise(
+      mean = mean(.data[[var]], na.rm = TRUE),
+      se = sd(.data[[var]], na.rm = TRUE) / sqrt(sum(!is.na(.data[[var]]))),
+      n = sum(!is.na(.data[[var]])),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      lower = mean - 1.96 * se,
+      upper = mean + 1.96 * se,
+      variable = var
+    ) |>
+    mutate(criteria_ref = "Recognised refugees")
+  
+  bind_rows(summary_criteria, summary_ref)
+}
+
+
+# Function to plot mean values
+plot_fun <- function(data, theme_func = theme_unhcr, fill_scale_func = scale_fill_unhcr_d) {
+  ggplot(data, aes(x = stratum, y = mean, fill = criteria_ref)) +
+    geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+    geom_errorbar(aes(ymin = lower, ymax = upper),
+                  position = position_dodge(width = 0.9),
+                  width = 0.25) +
+    # geom_text(aes(label = n),
+    #           position = position_dodge(width = 0.9),
+    #           vjust = -0.5,
+    #           size = 3) +
+    scale_y_continuous(
+      expand = c(0, 0),
+      labels = scales::percent
+    ) +
+    labs(title = "", y = "", x = "", fill = "") +
+    theme_func(grid = "Y") +
+    fill_scale_func() +
+    facet_wrap(~Country , scales = "free")
+}
+```
+
+
+
+
+The previous Methodological Note examines for each question in the identification sequence plausible explanations and shows that dropping out of the sequence is in many cases non-random. For example, respondents living in border regions and in a camp/site/refugee village are less likely to say that they ever had to cross a border, despite living outside the country of their birth. For a systematic analysis of the demographic, socio-economic and displacement-related factors that may be correlated with completing the identification sequence as expected, we conduct a logistic regression.
+ 
+The previous analyis also discussed that certain groups can by certain definition not be classified as refugees based on the existing criteria - for example as children of refugees were never forced to flee but are likely to have (derivative) refugee status.
+
+
+**Financial services**
+```{r}
+ra_id <- ra_id %>%
+  mutate(`Financial account` = case_when(
+   FI01 == 1 | FI02 == 1 | FI10 == 1 ~ 1,
+   FI01 == 2 & FI02 == 2 & FI10 %in% c(2,3) ~ 0,
+    TRUE ~ NA                # For individuals under 18 and all other cases, assigns NA
+  ))
+
+ra_id <- ra_id %>%
+   mutate(`Financial account` = labelled(`Financial account`,
+                                labels = c(
+                                  "Yes" = 1,  
+                                  "No" = 0
+                                ),
+                                label = "Proportion of people above with an account at a bank or other financial institution or with a mobile-money-service provider"
+  ))
+
+
+```
+
+**Land access**
+```{r}
+roster_id <- roster_id |>
+  mutate(
+    documents = ifelse(rowSums(across(starts_with("Land10"), ~ .x == 1), na.rm = TRUE) > 0, 1, 0),
+    bequeath = ifelse(rowSums(across(starts_with("Land14"), ~ .x == 1), na.rm = TRUE) > 0, 1, 0),
+    tenure = ifelse(rowSums(across(starts_with("Land15"),  ~ .x %in% c(1, 2)), na.rm = TRUE) > 0, 1, 0)
+  )
+
+roster_id <- roster_id |>
+mutate(`Land documents` = case_when(documents == 1~ 1,  
+    TRUE ~ 0)) |>
+   mutate(`Land documents` = labelled(`Land documents`,
+                                labels = c(
+                                  "Has Legal document" = 1,  
+                                  "No legal documents" = 0  
+                                ),
+                                label = "People (adults) with legally recognized documentation over land")) |>
+  mutate(`Land tenure` = case_when(bequeath == 1 &
+                                tenure == 1 ~ 1, 
+                              TRUE ~ 0))
+roster_id <- roster_id |>
+   mutate(`Land tenure` = labelled(`Land tenure`,
+                                labels = c(
+                                  "Tenure secure" = 1,  
+                                  "Tenure unsecure" = 0   
+                                ),
+                                label = "People (adults) who perceive their rights as secure"))
+
+land_docs_ci <- summary_ci(roster_id, "Land documents")
+land_tenure_ci <- summary_ci(roster_id, "Land tenure")
+```
+
+
+**Informal employment**
+
+```{r, eval=TRUE}
+#Step 1: Determine who is employed based on various conditions 
+ra_id <- ra_id %>%
+  mutate(employed = case_when(
+    EMP01 == 1 ~ 1,  # Paid employment - employees
+    (EMP02 == 1 & EMP06b == 3)  ~ 1,  # Self-employment
+    (EMP03 == 1 & EMP06b == 3)  ~ 1,  # Unpaid contributing family workers
+    EMP04 == 1  ~ 1,  # Absent but still employed
+    (EMP05 == 1 & EMP06a == 3)  ~ 1,  # Absent but self-employed
+    (EMP02 == 1 & EMP06b %in% c(1, 2) & EMP06c %in% c(1, 2))  ~ 1,  # Farming/rearing/fishing for sale
+    (EMP05 == 1 & EMP06a %in% c(1, 2) & EMP06c %in% c(1, 2))  ~ 1,  # Absent but farming for sale
+    TRUE ~ 0
+  ))
+
+#Step 2: Status in employment based on isce93 
+ra_id <- ra_id %>%
+  mutate(isce93 = case_when(
+    employed== 1 & EMP09 %in% c(1,2,3) ~ 1, #Employees
+    employed== 1 & EMP09 == 4 & EMP10_7 > 1 ~ 2, #Employers - assuming that all workers are paid
+    employed== 1 & EMP09 == 4 & EMP10_7 == 1 ~ 3, #Own-account workers
+    employed== 1 & EMP09 == 5 ~ 4, # Contributing family workers
+    employed== 1 & (EMP09 == 96 | is.na(EMP09)) ~ 5, #Workers not classifiable by status
+    employed == 0 ~ NA_real_,  # Set to NA when employed == 0
+    TRUE ~ NA_real_  # Default case (catches any unexpected values)
+  ))
+    
+
+#Step 3: Institutional sector of economic activities
+ra_id <- ra_id %>%
+  mutate(ins_sector = case_when(
+    employed== 1 & EMP10 %in% c(1,6)~ 1, #Public 
+    employed== 1 & EMP10 %in% c(2,3,5)~ 2, #Private
+    employed== 1 & EMP10 == 4 ~ 3, # Household domestic worker
+    employed== 1 & (EMP10 %in% c(96,98) | is.na(EMP10)) ~ 4)) #Not classified
+
+#Step 4: Employment benefits
+#Social security contribution (proxy:pension fund)
+ra_id <- ra_id %>%
+  mutate(socsec = case_when(
+  employed== 1 & EMP10_4 == 1  ~ 1, #Social security
+  employed== 1 & EMP10_4 == 2  ~ 2, #No social security
+  employed== 1 & (EMP10_4 == 98 | is.na(EMP10_4))  ~ 3)) #Not stated
+
+#Paid leave
+ra_id <- ra_id %>%
+  mutate(painleave = case_when(
+  employed== 1 & EMP10_5 == 1  ~ 1, #Paid leave
+  employed== 1 & EMP10_5 == 2  ~ 2, #No paid leave
+  employed== 1 & (EMP10_5 == 98 | is.na(EMP10_5))  ~ 3)) #Not stated
+
+#Paid sick leave
+ra_id <- ra_id %>%
+  mutate(sickleave = case_when(
+  employed== 1 & EMP10_6 == 1  ~ 1, #Sick leave
+  employed== 1 & EMP10_6 == 2  ~ 2, #No sick leave
+  employed== 1 & (EMP10_6 == 98 | is.na(EMP10_6))  ~ 3)) #Not stated
+
+#Parental leave
+ra_id <- ra_id %>%
+  mutate(parentalleave = case_when(
+  employed== 1 & EMP10_6a == 1  ~ 1, #Parental leave
+  employed== 1 & EMP10_6a == 2  ~ 2, #No parental leave
+  employed== 1 & (EMP10_6a == 98 | is.na(EMP10_6a))  ~ 3)) #Not stated
+
+##Step 5: Characteristics of the enterprise
+#Registration 
+ra_id <- ra_id %>%
+  mutate(registered = case_when(
+  employed== 1 & EMP10_11 == 1 ~ 1, #Registered 
+  employed== 1 & EMP10_11 == 2 ~ 2, #Not registered 
+  employed== 1 & (EMP10_11 == 98 | is.na(EMP10_11)) ~ 3)) #Not stated 
+#Bookkeeping 
+ra_id <- ra_id %>%
+  mutate(bookkeep = case_when(
+  employed== 1 & EMP10_12 == 1 ~ 1, #Keep accounts for tax purposes - formal
+  employed== 1 & EMP10_12 %in% c(2,3,4) ~ 2, #Keep accounts not for tax purposes; Personal use only; Does not keep accounts
+  employed== 1 & (EMP10_12 == 98 | is.na(EMP10_12)) ~ 3)) #Not stated 
+
+#Step 6: Informal/formal economy
+#UNIT OF PRODUCTION: FORMAL/INFORMAL SECTOR 
+ra_id <- ra_id %>%
+  mutate(unit_prod = case_when(
+    employed == 1 & ins_sector == 3 ~ 3, # Households
+    employed == 1 & (ins_sector == 1 | registered == 1 | bookkeep == 1) ~ 2, # Employment in formal sector
+    employed == 1 & !(ins_sector == 3 | ins_sector == 1 | registered == 1 | bookkeep == 1) ~ 1, # Informal sector
+    TRUE ~ NA_real_ # Default case for missing values
+  ))
+
+#NATURE OF JOB: FORMAL/INFORMAL EMPLOYMENT 
+ra_id <- ra_id %>%
+  mutate(job_nature = case_when(
+    (isce93  %in% c(2,3) & unit_prod !=2) | (isce93  %in% c(1, 5) & socsec !=1) | isce93 == 4 ~ 1, #Informal employment
+    (isce93  %in% c(2,3) & unit_prod ==2) | (isce93  %in% c(1, 5) & (socsec ==1 | (socsec == 3 & painleave ==1 & sickleave ==1))) ~ 0)) #Formal employment 
+
+```
+
+
+```{r, eval=TRUE}
+#Step 1: Determine who is employed based on various conditions 
+ra_id <- ra_id %>%
+  mutate(employed = case_when(
+    EMP01 == 1  ~ 1,  # Paid employment - employees
+    EMP02 == 1 & EMP06b == 3 ~ 1,  # Self-employment
+    EMP03 == 1 & EMP06b == 3 ~ 1,  # Unpaid contributing family workers
+    EMP04 == 1  ~ 1,  # Absent but still employed
+    EMP05 == 1 & EMP06a == 3~ 1,  # Absent 
+    EMP05 == 1 & EMP06b == 3~ 1,  # Absent self-employed
+    EMP02 == 1 & EMP06b %in% c(1, 2) & EMP06c %in% c(1, 2) ~ 1,  # Farming/rearing/fishing for sale
+    EMP03 == 1 & EMP06b %in% c(1, 2) & EMP06c %in% c(1, 2) ~ 1,  # ADDED: FAMILY farming/rearing/fishing for sale
+    EMP05 %in% c(1, 2) & EMP06b %in% c(1, 2) & EMP06c %in% c(1, 2) ~ 1,  # Temporarily bsent but farming for sale
+    EMP05 %in% c(1, 2) & EMP06a %in% c(1, 2) & EMP06b %in% c(1, 2) ~ 1,  # 
+    TRUE ~ 0  # Not employed
+  ))
+
+#Step 2: Define unemployed: those not employed but actively looking for work and available to carry out activities
+ra_id <- ra_id %>%
+  mutate(unemployed = case_when(
+    (employed == 0 & (EMP25a == 1 
+                      #| #EMP25aa == 1 (excluded as not in SSD)
+                      ) & EMP29 == 1) ~ 1,  # Actively looking for work
+    TRUE ~ 0  # Not unemployed if not actively looking or employed
+  ))
+
+#Step 3: Define labour force: anyone employed or unemployed
+ra_id <- ra_id %>%
+  mutate(labour_force = case_when(
+    (employed == 1 | unemployed == 1) ~ 1,  # Employed or actively seeking work
+    TRUE ~ 0  # Not in labour force
+  ))
+
+ra_id <- ra_id %>%
+  mutate(family_farming = case_when(
+    EMP06b  %in% c(3,4) | EMP06c %in% c(3,4) ~ 1,  
+    TRUE ~ 0
+  ))
+
+#Step 4: Outcome - Unemployment rate
+ra_id <- ra_id %>%
+  mutate(Unemployed = case_when(
+    employed == 1 & labour_force == 1 ~ 0,  # If employed, outcome is 2 (not unemployed)
+    unemployed == 1 & labour_force == 1 ~ 1,  # If unemployed, outcome is 1
+    TRUE ~ NA_real_  # Catch-all for cases not in the labor force or with missing data
+  ))
+
+ra_id <- ra_id %>%
+   mutate(Unemployed = labelled(Unemployed,
+                                labels = c(
+                                  "Unemployed" = 1,  # Label for Yes
+                                  "Not unemployed" = 0   # Label for No
+                                ),
+                                label = "Proportion of people (working age) who are unemployed"))
+```
+
+
+**Food consumption score**
+```{r}
+roster_id <- roster_id %>%
+  mutate(
+    FCSStap   = Food11aa,  # Cereals/staples
+    FCSPulse  = Food12a,   # Legumes/nuts
+    FCSDairy  = Food13a,   # Milk/dairy
+    FCSPr     = Food14a,   # Meat/fish/eggs
+    FCSVeg    = Food15a,   # Vegetables
+    FCSFruit  = Food16a,   # Fruits
+    FCSFat    = Food17a,   # Oils/fats
+    FCSSugar  = Food18a  ) %>%
+  mutate(across(FCSStap:FCSSugar, as.numeric))
+
+roster_id <- roster_id %>%
+  mutate(
+    FCS = FCSStap * 2 +      # Cereals weight: 2
+          FCSPulse * 3 +     # Pulses weight: 3
+          FCSDairy * 4 +     # Dairy weight: 4
+          FCSPr * 4 +        # Protein weight: 4
+          FCSVeg +       # Vegetables weight: 1
+          FCSFruit +     # Fruits weight: 1
+          FCSFat * 0.5 +       # Fats weight: 0.5
+          FCSSugar * 0.5       # Sugar weight: 0.5
+  )
+
+roster_id <- roster_id %>%
+  mutate(
+    FCSCat21 = case_when(
+      FCS <= 21 ~ "Poor",
+      FCS <= 35 ~ "Borderline",
+      FCS > 35 ~ "Acceptable",
+      TRUE ~ NA_character_
+    ),
+    FCSCat28 = case_when(
+      FCS <= 28 ~ "Poor",
+      FCS <= 42 ~ "Borderline",
+      FCS > 42 ~ "Acceptable", 
+      TRUE ~ NA_character_
+    )
+  )
+
+fcs_ci <- summary_ci(roster_id, "FCS")
+
+roster_id <- roster_id |>
+  mutate(
+    FCSPoorBorderline28 = case_when(
+      FCSCat28 %in% c("Poor", "Borderline") ~ 1,
+      TRUE ~ 0
+    )
+  ) |>
+  mutate(
+    FCSPoorBorderline21 = case_when(
+      FCSCat21 %in% c("Poor", "Borderline") ~ 1,
+      TRUE ~ 0
+    )
+  )
+```
+
+```{r}
+roster_id <- roster_id |> 
+  mutate(
+    `Social protection` = case_when(ScProtec01 == 1 ~ 1,
+                                     TRUE ~ 0)
+    ) |>
+   mutate(`Social protection` = labelled(`Social protection`,
+                                labels = c(
+                                  "Social protection" = 1,
+                                  "No social protection" = 0
+                                ),
+                                label = "Social protection"))
+```
+
+
+```{r}
+summary_diff <- function(data,
+                                         vars,
+                                         ref_label = "Recognised refugees",
+                                         criteria_var = "criteria_ref",
+                                         country_var = "Country") {
+  # Long format
+  long <- data %>%
+    select(all_of(c(country_var, criteria_var, vars))) %>%
+    pivot_longer(cols = all_of(vars), names_to = "variable", values_to = "value")
+  
+  # Group summaries: by Country × criteria_ref × variable
+  grp_sum <- long %>%
+    group_by(.data[[country_var]], .data[[criteria_var]], variable) %>%
+    summarise(
+      n = sum(!is.na(value)),
+      mean = mean(value, na.rm = TRUE),
+      sd   = sd(value, na.rm = TRUE),
+      se   = sd / sqrt(n),
+      .groups = "drop"
+    ) %>%
+    rename(
+      Country = !!country_var,
+      criteria_ref = !!criteria_var
+    )
+  
+  # Reference group per Country × variable
+  ref_sum <- grp_sum %>%
+    filter(criteria_ref == ref_label) %>%
+    rename(mean_ref = mean, sd_ref = sd, se_ref = se, n_ref = n) %>%
+    select(Country, variable, mean_ref, sd_ref, se_ref, n_ref)
+  
+  # Other groups
+  oth_sum <- grp_sum %>%
+    filter(criteria_ref != ref_label) %>%
+    rename(mean_g = mean, sd_g = sd, se_g = se, n_g = n)
+  
+  # Comparisons vs reference within Country × variable
+  cmp <- oth_sum %>%
+    left_join(ref_sum, by = c("Country", "variable")) %>%
+    mutate(
+      diff_mean = mean_g - mean_ref,
+      se_diff   = sqrt(se_g^2 + se_ref^2),
+      z_diff    = diff_mean / se_diff,
+      ci_low    = diff_mean - 1.96 * se_diff,
+      ci_high   = diff_mean + 1.96 * se_diff,
+      # Standardized Mean Difference (Cohen's d)
+      sd_pooled = sqrt(((pmax(n_g - 1, 1)) * sd_g^2 + (pmax(n_ref - 1, 1)) * sd_ref^2) / pmax(n_g + n_ref - 2, 1)),
+      smd       = diff_mean / sd_pooled,
+      # SD differences
+      diff_sd   = sd_g - sd_ref,
+      sd_ratio  = sd_g / sd_ref
+    ) %>%
+    select(Country, variable, criteria_ref,
+           n_g, mean_g, sd_g,
+           n_ref, mean_ref, sd_ref,
+           diff_mean, z_diff, ci_low, ci_high, smd, diff_sd, sd_ratio)
+  
+  list(
+    group_summary = grp_sum,
+    comparisons = cmp
+  )
+}
+
+
+
+vars_to_check <- c("FCSPoorBorderline28", "Land documents", "Land tenure", "Social protection")
+
+out <- summary_diff(
+  data = roster_id,
+  vars = vars_to_check,
+  ref_label = "Refugee based on criteria",  # your chosen reference label
+  criteria_var = "criteria_ref",
+  country_var = "Country"
+)
+
+vars_to_check_ra <- c("Financial account", "Unemployed")
+
+out_ra <- summary_diff(
+  data = ra_id,
+  vars = vars_to_check_ra,
+  ref_label = "Refugee based on criteria",  # your chosen reference label
+  criteria_var = "criteria_ref",
+  country_var = "Country"
+)
+
+out$comparisons <- bind_rows(out$comparisons, out_ra$comparisons)
+# Browse outputs
+dplyr::arrange(out$group_summary, Country, variable, criteria_ref) %>% head()
+dplyr::arrange(out$comparisons, Country, variable, criteria_ref) %>% head()
+
+
+cmp <- out$comparisons %>%
+  mutate(
+    panel = Country,
+    p_value = 2 * pnorm(abs(z_diff), lower.tail = FALSE),
+    sig = case_when(
+      p_value < 0.001 ~ "***",
+      p_value < 0.01  ~ "**",
+      p_value < 0.05  ~ "*",
+      p_value < 0.1   ~ ".",
+      TRUE            ~ ""
+    )
+  )
+
+# Helpers to reorder within facets
+reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+  x <- as.character(x); within <- as.character(within)
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun, ...)
+}
+scale_y_reordered <- function(sep = "___") {
+  scale_y_discrete(labels = function(x) gsub(paste0(sep, ".*$"), "", x))
+}
+```
+
+```{r}
+ggplot(
+  cmp,
+  aes(
+    x = z_diff,
+    y = Country,
+    color = sig
+  )
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+  geom_errorbarh(aes(xmin = ci_low, xmax = ci_high), height = 0, size = 0.6, alpha = 0.85) +
+  geom_point(size = 2) +
+  facet_grid(~ variable, scales = "free_y", space = "free_y") +
+  scale_y_reordered() +
+  labs(
+    x = NULL,
+    y = NULL,
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    legend.position = "bottom"
+  )
+```
+
+# Roster position
+We test whether the position in the roster has an effect on the likelihood of completing the roster. T
+```{r, fig.cap = "Share of refugees with a valid document completing the identification questions, by member position and relation to household head"}
+
+top5_relationships <- roster_id %>%
+  filter(!HH_03 %in% c("The household head himself/herself", "Household head", "Wife/Husband/Partner")) %>%
+  count(HH_03, sort = TRUE) %>%
+  slice_head(n = 2)
+
+
+plot_data <- roster_id  %>%
+  filter(HH_03 %in% top5_relationships$HH_03) %>%
+  mutate(HH_03 = labelled::to_factor(HH_03)) %>%
+  filter(as.numeric(mPosition) %in% c(2:7)) %>%
+  group_by(Country, mPosition, HH_03) %>%
+  summarise(
+    n = n(),
+    proportion = mean(criteria_ref_num == 1)
+  ) %>%
+  mutate(
+    se = sqrt(proportion * (1 - proportion) / n),
+    ci_lower = proportion - 1.96 * se,
+    ci_upper = proportion + 1.96 * se,
+    proportion_pct = proportion * 100,
+    ci_lower_pct = ci_lower * 100,
+    ci_upper_pct = ci_upper * 100
+  ) 
+
+# Plot
+
+ggplot(plot_data, aes(x = as.integer(mPosition), y = proportion_pct, color = HH_03, group = HH_03)) +
+  geom_line() +
+  geom_point(size = 1) +
+  geom_errorbar(aes(ymin = ci_lower_pct, ymax = ci_upper_pct), width = 0.2, alpha = .2) +
+  scale_y_continuous(labels = percent_format(scale = 1), limits = c(0, 100)) +
+  geom_hline(yintercept = 0) +
+  labs(
+    x = "Roster position",
+    y = ""
+  ) +
+  theme_unhcr( grid = "Y") +
+  facet_grid(HH_03 ~ Country)
+
+
+
+```
+
